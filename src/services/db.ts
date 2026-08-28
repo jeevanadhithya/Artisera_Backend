@@ -104,6 +104,77 @@ export const getAllArtisans = async (limit: number = 50, offset: number = 0): Pr
   return queryResult.data || [];
 };
 
+// ─── Buyers ───────────────────────────────────────────────────────────────────
+
+export const createBuyer = async (userId: string, data: Record<string, any>): Promise<any> => {
+  const supabase = getSupabase();
+  const payload = {
+    user_id: userId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...data,
+  };
+  
+  const queryResult = await executeQuery<any>(
+    'buyers',
+    supabase.from('buyers').insert(payload).select().single(),
+    'Failed to create buyer profile'
+  );
+  return queryResult.data;
+};
+
+export const getBuyerByUserId = async (userId: string): Promise<any | null> => {
+  const supabase = getSupabase();
+  const queryResult = await executeQuery<any>(
+    'buyers',
+    supabase.from('buyers').select('*').eq('user_id', userId).maybeSingle(),
+    'Failed to fetch buyer by user_id'
+  );
+  return queryResult.data;
+};
+
+export const getOrCreateBuyer = async (userId: string, nameHint?: string): Promise<any> => {
+  const existing = await getBuyerByUserId(userId);
+  if (existing) return existing;
+
+  const emailName = (nameHint || '').trim() || 'New Buyer';
+  const defaultData = {
+    name: emailName,
+    organization_name: 'Independent Buyer',
+    phone: '',
+    business_category: 'Wholesale',
+    location: 'Unknown',
+    buyer_information: '',
+  };
+  console.log(`Auto-created placeholder buyer profile for user ${userId}`);
+  return createBuyer(userId, defaultData);
+};
+
+export const updateBuyer = async (buyerId: string, data: Record<string, any>): Promise<any> => {
+  const supabase = getSupabase();
+  data.updated_at = new Date().toISOString();
+  
+  const queryResult = await executeQuery<any>(
+    'buyers',
+    supabase.from('buyers').update(data).eq('id', buyerId).select().maybeSingle(),
+    'Failed to update buyer'
+  );
+  if (!queryResult.data) {
+    throw new NotFoundError('Buyer', buyerId);
+  }
+  return queryResult.data;
+};
+
+export const getAllBuyers = async (limit: number = 50, offset: number = 0): Promise<any[]> => {
+  const supabase = getSupabase();
+  const queryResult = await executeQuery<any[]>(
+    'buyers',
+    supabase.from('buyers').select('*').range(offset, offset + limit - 1),
+    'Failed to fetch buyers'
+  );
+  return queryResult.data || [];
+};
+
 // ─── Products ─────────────────────────────────────────────────────────────────
 
 export const createProduct = async (artisanId: string, data: Record<string, any>): Promise<any> => {

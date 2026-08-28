@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { requireAuth, requireArtisan, getOptionalUser, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuth, requireArtisan, requireVerifiedProfile, getOptionalUser, AuthenticatedRequest } from '../middleware/auth';
 import * as db from '../services/db';
 import * as imageService from '../services/image';
 import * as storageService from '../services/storage';
@@ -27,7 +27,7 @@ const verifyOwnership = async (productId: string, userId: string, userRole: stri
 };
 
 // ─── Create Product (POST /products) ──────────────────────────────────────────
-router.post('/', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/', requireAuth, requireArtisan, requireVerifiedProfile, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
@@ -431,6 +431,40 @@ router.get('/:product_id/price', requireAuth, async (req: AuthenticatedRequest, 
       product_id: req.params.product_id,
       product_name: product.name,
       pricing: result,
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Publish Product (POST /products/:id/publish) ─────────────────────────────
+router.post('/:product_id/publish', requireAuth, requireArtisan, requireVerifiedProfile, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    await verifyOwnership(req.params.product_id, user.user_id, user.role);
+
+    const product = await db.getProductById(req.params.product_id);
+
+    // Validate required fields
+    if (!product.image_url && !product.original_image_url && !product.enhanced_image_url) {
+      throw new BadRequestError('Cannot publish product: photo is missing.', 'MISSING_PHOTO');
+    }
+    if (!product.name || product.name === 'Untitled Craft Draft') {
+      throw new BadRequestError('Cannot publish product: catalog name is missing or incomplete.', 'MISSING_CATALOG_NAME');
+    }
+    if (!product.price || parseFloat(product.price.toString()) <= 0) {
+      throw new BadRequestError('Cannot publish product: price is missing or invalid.', 'MISSING_PRICE');
+    }
+
+    const updated = await db.updateProduct(req.params.product_id, {
+      status: 'published'
+    });
+
+    res.status(200).json(success({
+      product_id: req.params.product_id,
+      status: 'published',
+      product: updated,
+      message: 'Your product is now live on Artisera.'
     }));
   } catch (error) {
     next(error);

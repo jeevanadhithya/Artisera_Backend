@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { requireAuth, requireBuyer, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuth, requireBuyer, requireVerifiedProfile, AuthenticatedRequest } from '../middleware/auth';
 import * as db from '../services/db';
 import { ForbiddenError } from '../types/errors';
 
@@ -8,7 +8,7 @@ const router = Router();
 const success = (data: any) => ({ success: true, data });
 
 // POST /buyers/requests (create buyer request)
-router.post('/requests', requireAuth, requireBuyer, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/requests', requireAuth, requireBuyer, requireVerifiedProfile, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     const requestData = req.body;

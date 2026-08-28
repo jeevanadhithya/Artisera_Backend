@@ -13,6 +13,7 @@ import buyersRouter from './routes/buyers';
 import matchingRouter from './routes/matching';
 import wishlistRouter from './routes/wishlist';
 import adminRouter from './routes/admin';
+import profileRouter from './routes/profile';
 
 const app = express();
 
@@ -145,6 +146,7 @@ app.use(`${API_PREFIX}/buyers`, buyersRouter);
 app.use(`${API_PREFIX}/matching`, matchingRouter);
 app.use(`${API_PREFIX}/wishlist`, wishlistRouter);
 app.use(`${API_PREFIX}/admin`, adminRouter);
+app.use(`${API_PREFIX}/profile`, profileRouter);
 
 // ─── Global Error Handler ────────────────────────────────────────────────────
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
