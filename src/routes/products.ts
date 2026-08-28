@@ -30,7 +30,8 @@ const verifyOwnership = async (productId: string, userId: string, userRole: stri
 router.post('/', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const artisan = await db.getOrCreateArtisan(user.user_id, user.email);
+    const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
+    const artisan = await db.getOrCreateArtisan(user.user_id, nameHint);
     const created = await db.createProduct(artisan.id, req.body);
     res.status(201).json(success(created));
   } catch (error) {
@@ -303,7 +304,8 @@ router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async 
   try {
     const user = req.user!;
     const product = await db.getProductById(req.params.product_id);
-    const artisan = await db.getOrCreateArtisan(user.user_id, user.email);
+    const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
+    const artisan = await db.getOrCreateArtisan(user.user_id, nameHint);
 
     if (user.role !== 'admin' && artisan.id !== product.artisan_id) {
       throw new OwnershipError('product');

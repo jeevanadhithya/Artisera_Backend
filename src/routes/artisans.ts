@@ -11,7 +11,8 @@ const success = (data: any) => ({ success: true, data });
 router.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const profile = await db.getOrCreateArtisan(user.user_id, user.email);
+    const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
+    const profile = await db.getOrCreateArtisan(user.user_id, nameHint);
     res.status(200).json(success(profile));
   } catch (error) {
     next(error);
@@ -25,7 +26,8 @@ router.get('/me/dashboard', requireAuth, async (req: AuthenticatedRequest, res: 
     const artisan = await db.getArtisanByUserId(user.user_id);
     if (!artisan) {
       // Create minimal profile to prevent error
-      const profile = await db.getOrCreateArtisan(user.user_id, user.email);
+      const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
+      const profile = await db.getOrCreateArtisan(user.user_id, nameHint);
       const stats = await db.getArtisanDashboardStats(profile.id);
       return res.status(200).json(success({ artisan: profile, stats }));
     }
