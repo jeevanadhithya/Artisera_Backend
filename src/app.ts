@@ -113,7 +113,7 @@ app.get('/', async (req: Request, res: Response) => {
         <span class="badge ${dbStatus}">${dbMessage}</span>
       </div>
       <div class="service">
-        <span class="name">Gemini AI Client</span>
+        <span class="name">Gemini AI Client (Model: ${config.GEMINI_MODEL})</span>
         <span class="badge ${geminiStatus}">${geminiMessage}</span>
       </div>
       <div class="service">
