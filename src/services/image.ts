@@ -1,7 +1,13 @@
 import axios from 'axios';
-import sharp from 'sharp';
 import { config } from '../config';
 import { FileTooLargeError, InvalidFileTypeError, ValidationError } from '../types/errors';
+
+let sharp: any = null;
+try {
+  sharp = require('sharp');
+} catch (err) {
+  console.warn('WARNING: Sharp library failed to load. Image enhancement will fall back to raw bytes.');
+}
 
 // Allowed Mime Types & extensions
 const ALLOWED_IMAGE_MIME_TYPES: Record<string, string[]> = {
@@ -97,6 +103,16 @@ export const enhanceImageBytes = async (
   imageBytes: Buffer,
   contentType: string
 ): Promise<{ content: Buffer; contentType: string; extension: string }> => {
+  if (!sharp) {
+    console.log('Bypassing image enhancement: Sharp library is not loaded. Returning raw image.');
+    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
+    return {
+      content: imageBytes,
+      contentType,
+      extension: ext
+    };
+  }
+
   try {
     let sh = sharp(imageBytes).rotate(); // auto-rotate based on EXIF tags
     
