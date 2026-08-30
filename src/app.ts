@@ -19,21 +19,7 @@ const app = express();
 
 // ─── CORS Middleware ─────────────────────────────────────────────────────────
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check if origin is in the allowed list
-    const isAllowed = config.CORS_ORIGINS.some(allowed => {
-      return allowed === '*' || origin === allowed || origin.startsWith(allowed);
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'apikey']

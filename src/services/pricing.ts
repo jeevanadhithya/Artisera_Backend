@@ -119,7 +119,7 @@ const buildExplanation = (
   ];
   if (demandAdj !== 1.00) {
     const direction = demandAdj > 1 ? 'increased' : 'reduced';
-    parts.push(`Demand ${direction} price by ${Math.abs(demandAdj - 1 * 100).toFixed(0)}%.`);
+    parts.push(`Demand ${direction} price by ${Math.abs((demandAdj - 1) * 100).toFixed(0)}%.`);
   }
   if (regionPremium !== 1.00) {
     parts.push(`Regional premium: ${((regionPremium - 1) * 100).toFixed(0)}% applied.`);

@@ -58,7 +58,7 @@ export const config: Config = {
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '',
   
-  LLM_PROVIDER: (process.env.LLM_PROVIDER === 'gemini' ? 'gemini' : 'qwen') as 'gemini' | 'qwen',
+  LLM_PROVIDER: (process.env.LLM_PROVIDER === 'qwen' ? 'qwen' : 'gemini') as 'gemini' | 'qwen',
   VLLM_BASE_URL: process.env.VLLM_BASE_URL,
   VLLM_API_KEY: process.env.VLLM_API_KEY,
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,

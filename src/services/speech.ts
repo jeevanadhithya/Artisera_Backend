@@ -63,20 +63,32 @@ const transcribeSarvam = async (
   const url = `${config.SARVAM_BASE_URL}/speech-to-text`;
   const languageCode = languageHintToBcp47(languageHint);
 
+  // Map appropriate extension for Sarvam audio decoder
+  const cleanMime = (contentType || 'audio/webm').toLowerCase();
+  let filename = 'voice.webm';
+  if (cleanMime.includes('wav')) filename = 'voice.wav';
+  else if (cleanMime.includes('mp4') || cleanMime.includes('m4a')) filename = 'voice.m4a';
+  else if (cleanMime.includes('mp3') || cleanMime.includes('mpeg')) filename = 'voice.mp3';
+  else if (cleanMime.includes('ogg')) filename = 'voice.ogg';
+
   // Use Node.js built-in global FormData and Blob
   const formData = new FormData();
-  const fileBlob = new Blob([audioBytes], { type: contentType || 'application/octet-stream' });
-  formData.append('file', fileBlob, 'voice.wav');
-  formData.append('model', config.SARVAM_SPEECH_MODEL);
-  formData.append('mode', config.SARVAM_SPEECH_MODE);
-  formData.append('language_code', languageCode);
+  const fileBlob = new Blob([audioBytes], { type: contentType || 'audio/webm' });
+  formData.append('file', fileBlob, filename);
+  formData.append('model', config.SARVAM_SPEECH_MODEL || 'saaras:v3');
+  formData.append('mode', config.SARVAM_SPEECH_MODE || 'transcribe');
+
+  // Only pass language_code if it is a known valid BCP-47 tag
+  if (languageCode && languageCode !== 'unknown') {
+    formData.append('language_code', languageCode);
+  }
 
   try {
     const response = await axios.post(url, formData, {
       headers: {
         'api-subscription-key': config.SARVAM_API_KEY,
       },
-      timeout: 120000, // voice parsing might take time
+      timeout: 120000,
     });
 
     const payload = response.data;
@@ -97,19 +109,21 @@ const transcribeSarvam = async (
 
     return {
       transcript: transcript.trim(),
-      language: displayLabel(languageCode),
+      language: languageCode !== 'unknown' ? displayLabel(languageCode) : (payload.language_code ? displayLabel(payload.language_code) : 'Hindi/English'),
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      console.warn('Sarvam API error response:', error.response?.status, error.response?.data);
       if (error.response?.status === 401 || error.response?.status === 403) {
         throw new AIServiceError('Sarvam authentication failed. Check SARVAM_API_KEY.');
       }
       if (error.response?.status === 429) {
         throw new AIServiceError('Sarvam rate limit exceeded, please try again later.');
       }
-      throw new AIServiceError(`Sarvam speech transcription failed (HTTP ${error.response?.status})`);
+      const apiMsg = error.response?.data?.error?.message || error.response?.data?.message || `HTTP ${error.response?.status}`;
+      throw new AIServiceError(`Sarvam speech transcription failed: ${apiMsg}`);
     }
-    throw new AIServiceError(`Unable to reach the speech service: ${error instanceof Error ? error.message : error}`);
+    throw new AIServiceError(`Unable to reach Sarvam speech service: ${error instanceof Error ? error.message : error}`);
   }
 };
 

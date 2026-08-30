@@ -47,10 +47,8 @@ router.put('/me', requireAuth, async (req: AuthenticatedRequest, res: Response, 
     let updated: any = null;
 
     if (user.role === 'artisan') {
-      const profile = await db.getArtisanByUserId(user.user_id);
-      if (!profile) {
-        throw new BadRequestError('Profile does not exist');
-      }
+      const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Artisan';
+      const profile = await db.getOrCreateArtisan(user.user_id, nameHint);
 
       // Check validation
       const name = (updateData.name || profile.name || '').trim();
@@ -68,10 +66,8 @@ router.put('/me', requireAuth, async (req: AuthenticatedRequest, res: Response, 
 
       updated = await db.updateArtisan(profile.id, payload);
     } else if (user.role === 'buyer') {
-      const profile = await db.getBuyerByUserId(user.user_id);
-      if (!profile) {
-        throw new BadRequestError('Profile does not exist');
-      }
+      const nameHint = user.raw?.user_metadata?.name || user.email?.split('@')[0] || 'Buyer';
+      const profile = await db.getOrCreateBuyer(user.user_id, nameHint);
 
       // Check validation
       const name = (updateData.name || profile.name || '').trim();

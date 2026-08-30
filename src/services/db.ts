@@ -15,9 +15,10 @@ const executeQuery = async <T>(
     const { data, error, count } = await promise;
     if (error) throw error;
     return { data, count };
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Database error on table '${table}':`, error);
-    throw new DatabaseError(`${errorMessage}: ${error instanceof Error ? error.message : error}`);
+    const errorMsg = error?.message || error?.details || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+    throw new DatabaseError(`${errorMessage}: ${errorMsg}`);
   }
 };
 

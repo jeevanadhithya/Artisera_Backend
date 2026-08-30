@@ -9,6 +9,9 @@ import * as llmService from '../services/llm';
 import * as pricingService from '../services/pricing';
 import { BadRequestError, ForbiddenError, NotFoundError, OwnershipError } from '../types/errors';
 
+import { getSupabase } from '../services/supabase';
+import { config } from '../config';
+
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -195,7 +198,7 @@ router.post('/:product_id/enhance-image', requireAuth, requireArtisan, upload.si
     const product = await db.getProductById(req.params.product_id);
 
     let originalUrl = '';
-    let imageBytes: Buffer;
+    let imageBytes: Buffer = Buffer.alloc(0);
     let contentType = '';
 
     if (req.file) {
@@ -213,9 +216,31 @@ router.post('/:product_id/enhance-image', requireAuth, requireArtisan, upload.si
       if (!originalUrl) {
         throw new BadRequestError('No image to enhance. Upload an image first.', 'NO_IMAGE_TO_ENHANCE');
       }
-      const fetched = await imageService.fetchImageBytes(originalUrl);
-      imageBytes = fetched.content;
-      contentType = fetched.contentType;
+
+      // First attempt downloading directly from Supabase Storage SDK if originalUrl points to storage bucket
+      let fetchedDirectly = false;
+      const bucket = config.STORAGE_BUCKET_PRODUCTS;
+      const bucketIdx = originalUrl.indexOf(bucket);
+      if (bucketIdx !== -1) {
+        const storagePath = originalUrl.substring(bucketIdx + bucket.length + 1);
+        try {
+          const supabase = getSupabase();
+          const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+          if (!error && data) {
+            imageBytes = Buffer.from(await data.arrayBuffer());
+            contentType = data.type || 'image/jpeg';
+            fetchedDirectly = true;
+          }
+        } catch (sErr) {
+          console.warn('Supabase storage SDK download attempt failed, falling back to HTTP fetch:', sErr);
+        }
+      }
+
+      if (!fetchedDirectly) {
+        const fetched = await imageService.fetchImageBytes(originalUrl);
+        imageBytes = fetched.content;
+        contentType = fetched.contentType;
+      }
     }
 
     // Run sharp enhancement
