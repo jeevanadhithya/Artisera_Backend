@@ -1,8 +1,32 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+let currentDir = process.cwd();
+try {
+  // @ts-ignore
+  if (typeof __dirname !== 'undefined') {
+    // @ts-ignore
+    currentDir = __dirname;
+  }
+} catch (_) {}
+
+// Candidate paths to search for .env
+const candidateEnvPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'Backend/.env'),
+  path.resolve(currentDir, '../../.env'),
+  path.resolve(currentDir, '../../../.env'),
+  path.resolve(currentDir, '../.env'),
+];
+
+for (const envPath of candidateEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+}
+dotenv.config(); // fallback default
 
 export interface Config {
   PORT: number;
@@ -12,6 +36,7 @@ export interface Config {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SUPABASE_ANON_KEY: string;
+  DATABASE_URL: string;
   
   // AI
   LLM_PROVIDER: 'gemini' | 'qwen';
@@ -46,7 +71,7 @@ export interface Config {
 
 // Helper to parse comma-separated string to string array
 const parseCorsOrigins = (originsStr?: string): string[] => {
-  if (!originsStr) return ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
+  if (!originsStr) return ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080', 'https://artisera-frontend.vercel.app'];
   return originsStr.split(',').map(o => o.trim()).filter(Boolean);
 };
 
@@ -54,9 +79,10 @@ export const config: Config = {
   PORT: parseInt(process.env.PORT || '8000', 10),
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
   
-  SUPABASE_URL: process.env.SUPABASE_URL || '',
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '',
+  SUPABASE_URL: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://uxjgekvgaxrcvzhatzmt.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4amdla3ZnYXhyY3Z6aGF0em10Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzY2MzAwMywiZXhwIjoyMTAzMjM5MDAzfQ.lNXYGF54Mow6piIi_u40yJ6zdP-qJdj8LSt5sD1DbXU',
+  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4amdla3ZnYXhyY3Z6aGF0em10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NjMwMDMsImV4cCI6MjEwMzIzOTAwM30.GrI3IQGRwqggD7Qj3DsJRSsyeoDMHLSzM1loTgaiUFI',
+  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:live2kill%20L2K@db.uxjgekvgaxrcvzhatzmt.supabase.co:5432/postgres',
   
   LLM_PROVIDER: (process.env.LLM_PROVIDER === 'qwen' ? 'qwen' : 'gemini') as 'gemini' | 'qwen',
   VLLM_BASE_URL: process.env.VLLM_BASE_URL,

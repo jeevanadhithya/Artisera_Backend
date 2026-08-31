@@ -26,25 +26,20 @@ Extract only information supported by the input.
 
 Generate a professional but truthful product catalog.
 
-Do not invent:
-- material
-- region
-- certification
-- historical claims
-- pricing
-- manufacturing claims
+CRITICAL RULES:
+- All output fields MUST be valid non-null strings or non-empty string arrays. Never return null, undefined, or empty values.
+- If material, craft_type, or region is unknown or not explicitly specified, provide a reasonable general description (e.g. "Natural Material", "Traditional Craftsmanship", "India").
+- Do not invent pricing, fake certifications, or unsubstantiated historical claims.
 
-Return valid JSON matching the required schema exactly.
-
-Generate:
-- product_name: clear product name
-- category: product category (e.g. "Home Decor", "Textiles", "Pottery")
-- material: primary material (only what you can determine from the image/description)
+Return ONLY valid JSON matching the required schema:
+- product_name: clear descriptive product name
+- category: product category (e.g. "Home Decor", "Textiles", "Pottery", "Jewelry")
+- material: primary material
 - craft_type: craft technique used
-- region: region of origin (only if discernible)
+- region: region of origin
 - description_en: 100-200 word English description
 - description_hi: 100-200 word Hindi description
-- keywords: 5-10 relevant search keywords as a JSON array
+- keywords: 5-10 relevant search keywords as a JSON array of strings
 - confidence: your confidence score from 0.0 to 1.0
 
 Return ONLY valid JSON. No markdown. No explanation.`;
@@ -91,10 +86,64 @@ const sanitizeCatalogOutput = (parsed: any): AICatalogOutput => {
   };
 };
 
+const tryRepairTruncatedJson = (jsonStr: string): any => {
+  let str = jsonStr.trim();
+  str = str.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  const firstBrace = str.indexOf('{');
+  if (firstBrace !== -1) {
+    str = str.substring(firstBrace);
+  }
+
+  let inString = false;
+  let escaped = false;
+  let openBraces = 0;
+  let openBrackets = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === '{') openBraces++;
+      if (char === '}') openBraces--;
+      if (char === '[') openBrackets++;
+      if (char === ']') openBrackets--;
+    }
+  }
+
+  if (inString) {
+    str += '"';
+  }
+
+  str = str.replace(/:\s*$/, ': null').replace(/,\s*$/, '');
+
+  while (openBrackets > 0) {
+    str += ']';
+    openBrackets--;
+  }
+  while (openBraces > 0) {
+    str += '}';
+    openBraces--;
+  }
+
+  return JSON.parse(str);
+};
+
 const parseAndValidateCatalog = (rawText: string): AICatalogOutput => {
-  let text = rawText.trim();
+  let text = rawText.trim().replace(/```json/gi, '').replace(/```/g, '').trim();
   
-  // Extract JSON object using regex
+  // Extract JSON object using regex if present
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     text = jsonMatch[0];
@@ -104,17 +153,20 @@ const parseAndValidateCatalog = (rawText: string): AICatalogOutput => {
     const parsed = JSON.parse(text);
     return AICatalogOutputSchema.parse(parsed);
   } catch (error) {
-    console.warn('Strict schema parse failed, applying sanitized fallback parsing. Raw text:', rawText);
     try {
       const parsed = JSON.parse(text);
       return sanitizeCatalogOutput(parsed);
     } catch (syntaxErr) {
-      console.error('Failed to parse JSON from AI response:', rawText);
-      // Return high-quality fallback object so request never fails with 503
-      return sanitizeCatalogOutput({
-        product_name: 'Handcrafted Artisan Product',
-        description_en: rawText.replace(/```json|```|\{|\}/g, '').trim().substring(0, 300) || 'Beautiful handcrafted artisan product created with authentic traditional craftsmanship.',
-      });
+      try {
+        const repaired = tryRepairTruncatedJson(rawText);
+        return sanitizeCatalogOutput(repaired);
+      } catch (repairErr) {
+        console.warn('Applying fallback catalog structure for AI response text:', rawText.substring(0, 100));
+        return sanitizeCatalogOutput({
+          product_name: 'Handcrafted Artisan Product',
+          description_en: rawText.replace(/```json|```|\{|\}/g, '').trim().substring(0, 300) || 'Beautiful handcrafted artisan product created with authentic traditional craftsmanship.',
+        });
+      }
     }
   }
 };
@@ -286,8 +338,33 @@ const generateCatalogGemini = async (
     contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
       responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          product_name: { type: 'STRING' },
+          category: { type: 'STRING' },
+          material: { type: 'STRING' },
+          craft_type: { type: 'STRING' },
+          region: { type: 'STRING' },
+          description_en: { type: 'STRING' },
+          description_hi: { type: 'STRING' },
+          keywords: { type: 'ARRAY', items: { type: 'STRING' } },
+          confidence: { type: 'NUMBER' },
+        },
+        required: [
+          'product_name',
+          'category',
+          'material',
+          'craft_type',
+          'region',
+          'description_en',
+          'description_hi',
+          'keywords',
+          'confidence',
+        ],
+      },
     },
   };
 

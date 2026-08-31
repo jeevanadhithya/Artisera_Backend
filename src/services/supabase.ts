@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../config';
+import { getPool } from './db';
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -18,3 +19,19 @@ export const getSupabase = (): SupabaseClient => {
   }
   return supabaseClient;
 };
+
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const pool = getPool();
+    const result = await pool.query('SELECT NOW() as current_time;');
+    if (result.rows.length > 0) {
+      console.log(`✅ Database successfully connected & verified via DATABASE_URL`);
+      return true;
+    }
+    return false;
+  } catch (err: any) {
+    console.warn(`⚠️ Database connection warning via DATABASE_URL:`, err?.message || err);
+    return false;
+  }
+};
+
