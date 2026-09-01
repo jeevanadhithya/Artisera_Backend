@@ -511,3 +511,109 @@ export const getArtisanDashboardStats = async (artisanId: string): Promise<Recor
     market_opportunities: opportunities,
   };
 };
+
+// ─── Product Images ───────────────────────────────────────────────────────────
+
+export const createProductImage = async (data: {
+  id?: string;
+  product_id: string;
+  artisan_id: string;
+  original_image_url: string;
+  enhanced_image_url?: string;
+  selected_image_url?: string;
+  processing_status?: string;
+  analysis_status?: string;
+  mime_type?: string;
+  file_size?: number;
+  enhancement_prompt?: string;
+  analysis_result?: any;
+}): Promise<any> => {
+
+  const payload = {
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    processing_status: 'uploaded',
+    analysis_status: 'pending',
+    ...data,
+  };
+  const { sql, values } = buildInsertQuery('product_images', payload);
+  return queryOne(sql, values);
+};
+
+export const getProductImageById = async (imageId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.product_images WHERE id = $1;`, [imageId]);
+};
+
+export const getProductImagesByProductId = async (productId: string): Promise<any[]> => {
+  return query(
+    `SELECT * FROM public.product_images WHERE product_id = $1 ORDER BY created_at DESC;`,
+    [productId]
+  );
+};
+
+export const updateProductImage = async (imageId: string, data: Record<string, any>): Promise<any> => {
+  data.updated_at = new Date().toISOString();
+  const { sql, values } = buildUpdateQuery('product_images', imageId, data);
+  const result = await queryOne(sql, values);
+  if (!result) {
+    throw new NotFoundError('Product image', imageId);
+  }
+  return result;
+};
+
+export const deleteProductImage = async (imageId: string): Promise<void> => {
+  await query(`DELETE FROM public.product_images WHERE id = $1;`, [imageId]);
+};
+
+// ─── Product Translations ─────────────────────────────────────────────────────
+
+export const saveProductTranslation = async (
+  productId: string,
+  languageCode: string,
+  data: {
+    title?: string;
+    short_description?: string;
+    description?: string;
+    keywords?: string[];
+  }
+): Promise<any> => {
+  const now = new Date().toISOString();
+  const sql = `
+    INSERT INTO public.product_translations (
+      product_id, language_code, title, short_description, description, keywords, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (product_id, language_code) 
+    DO UPDATE SET 
+      title = EXCLUDED.title,
+      short_description = EXCLUDED.short_description,
+      description = EXCLUDED.description,
+      keywords = EXCLUDED.keywords,
+      updated_at = EXCLUDED.updated_at
+    RETURNING *;
+  `;
+  return queryOne(sql, [
+    productId,
+    languageCode,
+    data.title || null,
+    data.short_description || null,
+    data.description || null,
+    data.keywords || [],
+    now,
+    now,
+  ]);
+};
+
+export const getProductTranslations = async (productId: string): Promise<any[]> => {
+  return query(
+    `SELECT * FROM public.product_translations WHERE product_id = $1 ORDER BY language_code ASC;`,
+    [productId]
+  );
+};
+
+export const getProductTranslation = async (productId: string, languageCode: string): Promise<any | null> => {
+  return queryOne(
+    `SELECT * FROM public.product_translations WHERE product_id = $1 AND language_code = $2;`,
+    [productId, languageCode]
+  );
+};
+

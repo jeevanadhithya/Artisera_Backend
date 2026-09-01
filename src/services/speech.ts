@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config';
 import { AIServiceError } from '../types/errors';
+import { translateText } from './translation';
 
 const LANGUAGE_LABELS: Record<string, string> = {
   'hi-in': 'Hindi',
@@ -17,6 +18,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
   'as-in': 'Assamese',
   'ur-in': 'Urdu',
   'ne-in': 'Nepali',
+  'sa-in': 'Sanskrit',
 };
 
 const displayLabel = (bcp47?: string): string | undefined => {
@@ -40,17 +42,29 @@ const languageHintToBcp47 = (languageHint?: string): string => {
     kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', bn: 'bn-IN',
     gu: 'gu-IN', od: 'od-IN', pa: 'pa-IN', as: 'as-IN',
     ur: 'ur-IN', ne: 'ne-IN', sa: 'sa-IN',
+    hindi: 'hi-IN', english: 'en-IN', tamil: 'ta-IN', telugu: 'te-IN',
+    kannada: 'kn-IN', malayalam: 'ml-IN', marathi: 'mr-IN', bengali: 'bn-IN',
+    gujarati: 'gu-IN', odia: 'od-IN', punjabi: 'pa-IN', assamese: 'as-IN',
   };
   
   return regionMap[hint] || 'unknown';
 };
 
+// Check if string contains non-ASCII characters (e.g. Indic scripts like Devanagari, Tamil, Telugu, Bengali)
+const isNonEnglish = (text: string): boolean => {
+  if (!text) return false;
+  // Check for characters outside basic ASCII range (Indic scripts start from \u0900)
+  return /[^\u0000-\u007F]/.test(text);
+};
+
 export interface TranscriptionResult {
-  transcript: string;
-  language?: string;
+  transcript: string; // English text translated from any spoken language
+  rawTranscript?: string; // Original spoken text in native language
+  language?: string; // Spoken language label (e.g. 'Hindi', 'Tamil', 'Marathi')
+  languageCode?: string; // BCP-47 language tag
 }
 
-// ─── Sarvam Speech-to-Text ────────────────────────────────────────────────────
+// ─── Sarvam Speech-to-Text with Automatic English Translation ─────────────────
 const transcribeSarvam = async (
   audioBytes: Buffer,
   contentType: string,
@@ -92,24 +106,59 @@ const transcribeSarvam = async (
     });
 
     const payload = response.data;
-    let transcript = '';
+    let rawTranscript = '';
 
     if (Array.isArray(payload.transcripts) && payload.transcripts.length > 0) {
-      transcript = payload.transcripts
+      rawTranscript = payload.transcripts
         .map((seg: any) => seg.transcript || '')
         .filter(Boolean)
         .join(' ');
     } else {
-      transcript = payload.transcript || '';
+      rawTranscript = payload.transcript || '';
     }
 
-    if (!transcript) {
+    if (!rawTranscript || !rawTranscript.trim()) {
       throw new AIServiceError('Sarvam returned an empty transcript');
     }
 
+    rawTranscript = rawTranscript.trim();
+    const detectedLangCode = (payload.language_code && payload.language_code !== 'unknown')
+      ? payload.language_code
+      : (languageCode !== 'unknown' ? languageCode : 'hi-IN');
+    const detectedLanguageName = displayLabel(detectedLangCode) || 'Regional Language';
+
+    // If already in English and no Indic characters, use it directly
+    if (!isNonEnglish(rawTranscript) && detectedLangCode.toLowerCase().startsWith('en')) {
+      return {
+        transcript: rawTranscript,
+        rawTranscript,
+        language: 'English',
+        languageCode: 'en-IN',
+      };
+    }
+
+    // Convert non-English speech to fluent English text using Sarvam Translation
+    let englishTranscript = rawTranscript;
+    try {
+      console.log(`Translating voice transcript from ${detectedLanguageName} to English...`);
+      englishTranscript = await translateText(rawTranscript, detectedLangCode || 'auto', 'en-IN');
+    } catch (transErr) {
+      console.warn('Sarvam translation to English failed, falling back to Gemini translation:', transErr);
+      if (config.GEMINI_API_KEY) {
+        try {
+          englishTranscript = await translateWithGemini(rawTranscript, detectedLanguageName);
+        } catch (gErr) {
+          console.warn('Gemini translation fallback also failed:', gErr);
+          englishTranscript = rawTranscript;
+        }
+      }
+    }
+
     return {
-      transcript: transcript.trim(),
-      language: languageCode !== 'unknown' ? displayLabel(languageCode) : (payload.language_code ? displayLabel(payload.language_code) : 'Hindi/English'),
+      transcript: englishTranscript,
+      rawTranscript,
+      language: detectedLanguageName,
+      languageCode: detectedLangCode,
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -127,7 +176,40 @@ const transcribeSarvam = async (
   }
 };
 
-// ─── Gemini Speech-to-Text Fallback ──────────────────────────────────────────
+// ─── Gemini Translation Helper ───────────────────────────────────────────────
+const translateWithGemini = async (text: string, sourceLanguage?: string): Promise<string> => {
+  if (!config.GEMINI_API_KEY) return text;
+  const langContext = sourceLanguage ? `from ${sourceLanguage}` : 'from its original language';
+
+  const payload = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `Translate the following artisan craft voice description ${langContext} into clear, natural, high-quality English text for an e-commerce product catalog. Return ONLY the English translation without quotes or explanations.\n\nText: "${text}"`,
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 1024,
+    },
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.GEMINI_MODEL}:generateContent?key=${config.GEMINI_API_KEY}`;
+  const response = await axios.post(url, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 30000,
+  });
+
+  const candidate = response.data?.candidates?.[0];
+  const translated = candidate?.content?.parts?.[0]?.text?.trim();
+  return translated || text;
+};
+
+// ─── Gemini Speech-to-Text Fallback (Voice in Any Language -> English Text) ───
 const transcribeGemini = async (
   audioBytes: Buffer,
   contentType: string,
@@ -138,7 +220,7 @@ const transcribeGemini = async (
   }
 
   const audioB64 = audioBytes.toString('base64');
-  const langInstruction = languageHint ? ` The audio is in language '${languageHint}'.` : '';
+  const langInstruction = languageHint ? ` The speaker is talking in '${languageHint}'.` : ' The speaker may speak in any Indian regional language or English.';
 
   const payload = {
     contents: [
@@ -152,7 +234,10 @@ const transcribeGemini = async (
             },
           },
           {
-            text: `Transcribe this audio recording accurately.${langInstruction} Return only the transcribed text, no explanation or formatting.`,
+            text: `Listen to this artisan craft voice recording.${langInstruction}
+1. Accurately understand and transcribe the craft details spoken in the audio.
+2. Translate the speech completely into natural, clear, fluent English text suitable for an online marketplace product description.
+3. Return ONLY the English text. Do not include markdown codeblocks, metadata, or explanations.`,
           },
         ],
       },
@@ -182,7 +267,7 @@ const transcribeGemini = async (
 
     return {
       transcript,
-      language: displayLabel(languageHint),
+      language: displayLabel(languageHint) || 'Auto-detected',
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -198,10 +283,10 @@ export const transcribeAudio = async (
   contentType: string,
   languageHint?: string
 ): Promise<TranscriptionResult> => {
-  // If Sarvam API key is configured, use it first
+  // If Sarvam API key is configured, use it first (native speech-to-text + auto translate to English)
   if (config.SARVAM_API_KEY) {
     try {
-      console.log('Transcribing via primary provider (Sarvam)...');
+      console.log('Transcribing via primary provider (Sarvam) & converting to English...');
       return await transcribeSarvam(audioBytes, contentType, languageHint);
     } catch (error) {
       console.warn('Sarvam transcription failed, trying fallback...', error);
@@ -212,11 +297,12 @@ export const transcribeAudio = async (
     }
   }
 
-  // If only Gemini is configured, use it directly
+  // If only Gemini is configured, transcribe directly to English
   if (config.GEMINI_API_KEY) {
-    console.log('Transcribing via fallback provider (Gemini)...');
+    console.log('Transcribing via fallback provider (Gemini) directly to English...');
     return await transcribeGemini(audioBytes, contentType, languageHint);
   }
 
   throw new AIServiceError('No speech-to-text provider is configured. Please set SARVAM_API_KEY or GEMINI_API_KEY.');
 };
+

@@ -14,8 +14,10 @@ import matchingRouter from './routes/matching';
 import wishlistRouter from './routes/wishlist';
 import adminRouter from './routes/admin';
 import profileRouter from './routes/profile';
+import imagesRouter from './routes/images';
 
 const app = express();
+
 
 // ─── CORS Middleware ─────────────────────────────────────────────────────────
 app.use(cors({
@@ -133,6 +135,7 @@ app.use(`${API_PREFIX}/matching`, matchingRouter);
 app.use(`${API_PREFIX}/wishlist`, wishlistRouter);
 app.use(`${API_PREFIX}/admin`, adminRouter);
 app.use(`${API_PREFIX}/profile`, profileRouter);
+app.use(`${API_PREFIX}/images`, imagesRouter);
 
 // Fallbacks for direct route matching
 app.use('/health', healthRouter);
@@ -144,6 +147,8 @@ app.use('/matching', matchingRouter);
 app.use('/wishlist', wishlistRouter);
 app.use('/admin', adminRouter);
 app.use('/profile', profileRouter);
+app.use('/images', imagesRouter);
+
 
 // ─── Global Error Handler ────────────────────────────────────────────────────
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

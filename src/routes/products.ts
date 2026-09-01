@@ -155,120 +155,203 @@ router.post('/:product_id/publish', requireAuth, requireArtisan, async (req: Aut
   }
 });
 
-// ─── Upload Image (POST /products/:id/image) ─────────────────────────────────
-router.post('/:product_id/image', requireAuth, requireArtisan, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// ─── Upload Image (POST /products/:id/images and /products/:id/image) ───────
+const handleImageUpload = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const product = await verifyOwnership(req.params.product_id, user.user_id, user.role);
+
+    if (!req.file) {
+      throw new BadRequestError('No image file uploaded', 'MISSING_FILE');
+    }
+
+    // Validate image format, size, and magic bytes
+    const { content, contentType, extension } = await imageService.validateAndReadImage(req.file);
+    const imageId = crypto.randomUUID();
+
+    // Upload original image to Supabase Storage: products/{artisanId}/{productId}/original/{imageId}.{ext}
+    const originalUrl = await storageService.uploadOriginalProductImage({
+      artisanId: product.artisan_id,
+      productId: req.params.product_id,
+      imageId,
+      fileContent: content,
+      contentType,
+      extension,
+    });
+
+    // Create record in product_images table
+    const imageRecord = await db.createProductImage({
+      id: imageId,
+      product_id: req.params.product_id,
+      artisan_id: product.artisan_id,
+      original_image_url: originalUrl,
+      processing_status: 'uploaded',
+      analysis_status: 'pending',
+      mime_type: contentType,
+      file_size: content.length,
+    });
+
+    // Update product reference
+    await db.updateProduct(req.params.product_id, {
+      original_image_url: originalUrl,
+      image_url: product.image_url || originalUrl,
+      selected_image_url: product.selected_image_url || originalUrl,
+    });
+
+    res.status(201).json(success({
+      imageId: imageRecord.id,
+      originalImageUrl: originalUrl,
+      status: 'uploaded',
+      product_id: req.params.product_id,
+      message: 'Original image uploaded successfully'
+    }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.post('/:product_id/images', requireAuth, requireArtisan, upload.single('file'), handleImageUpload);
+router.post('/:product_id/image', requireAuth, requireArtisan, upload.single('file'), handleImageUpload);
+
+// ─── List Product Images (GET /products/:id/images) ──────────────────────────
+router.get('/:product_id/images', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const product = await db.getProductById(req.params.product_id);
+
+    if (user.role === 'artisan') {
+      const artisan = await db.getArtisanByUserId(user.user_id);
+      if (!artisan || artisan.id !== product.artisan_id) {
+        throw new ForbiddenError('You can only view images of your own products');
+      }
+    }
+
+    const images = await db.getProductImagesByProductId(req.params.product_id);
+    res.status(200).json(success(images));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Enhance Image by ImageId (POST /products/:id/images/:imageId/enhance) ───
+router.post('/:product_id/images/:image_id/enhance', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     await verifyOwnership(req.params.product_id, user.user_id, user.role);
 
-    if (!req.file) {
-      throw new BadRequestError('No file uploaded', 'MISSING_FILE');
-    }
-
-    // Validate and read file
-    const { content, contentType, extension } = await imageService.validateAndReadImage(req.file);
-
-    // Upload to Supabase Storage
-    const imageUrl = await storageService.uploadProductImage(
-      req.params.product_id,
-      content,
-      req.file.originalname || `product.${extension}`,
-      contentType
+    const result = await imageService.imageEnhancementService.enhanceImageById(
+      req.params.image_id,
+      user.user_id,
+      user.role
     );
 
-    // Update in database
-    const updated = await db.updateProduct(req.params.product_id, { image_url: imageUrl, original_image_url: imageUrl });
-
     res.status(200).json(success({
-      product_id: req.params.product_id,
-      image_url: imageUrl,
-      product: updated,
-      message: 'Image uploaded successfully'
+      imageId: result.imageId,
+      originalImageUrl: result.originalImageUrl,
+      enhancedImageUrl: result.enhancedImageUrl,
+      status: result.status,
+      analysis: result.analysis,
+      message: 'Image enhanced successfully.'
     }));
   } catch (error) {
     next(error);
   }
 });
 
-// ─── Enhance Image (POST /products/:id/enhance-image) ────────────────────────
+// ─── Legacy Enhance Route (POST /products/:id/enhance-image) ────────────────
 router.post('/:product_id/enhance-image', requireAuth, requireArtisan, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    await verifyOwnership(req.params.product_id, user.user_id, user.role);
-    const product = await db.getProductById(req.params.product_id);
+    const product = await verifyOwnership(req.params.product_id, user.user_id, user.role);
 
-    let originalUrl = '';
-    let imageBytes: Buffer = Buffer.alloc(0);
-    let contentType = '';
+    let targetImageId: string | null = null;
 
     if (req.file) {
-      const { content, contentType: cType, extension } = await imageService.validateAndReadImage(req.file);
-      originalUrl = await storageService.uploadProductImage(
-        req.params.product_id,
-        content,
-        req.file.originalname || `product.${extension}`,
-        cType
-      );
-      imageBytes = content;
-      contentType = cType;
+      const { content, contentType, extension } = await imageService.validateAndReadImage(req.file);
+      const imageId = crypto.randomUUID();
+      const originalUrl = await storageService.uploadOriginalProductImage({
+        artisanId: product.artisan_id,
+        productId: req.params.product_id,
+        imageId,
+        fileContent: content,
+        contentType,
+        extension,
+      });
+
+      const imgRec = await db.createProductImage({
+        id: imageId,
+        product_id: req.params.product_id,
+        artisan_id: product.artisan_id,
+        original_image_url: originalUrl,
+        mime_type: contentType,
+        file_size: content.length,
+      });
+      targetImageId = imgRec.id;
     } else {
-      originalUrl = product.original_image_url || product.image_url;
-      if (!originalUrl) {
-        throw new BadRequestError('No image to enhance. Upload an image first.', 'NO_IMAGE_TO_ENHANCE');
-      }
-
-      // First attempt downloading directly from Supabase Storage SDK if originalUrl points to storage bucket
-      let fetchedDirectly = false;
-      const bucket = config.STORAGE_BUCKET_PRODUCTS;
-      const bucketIdx = originalUrl.indexOf(bucket);
-      if (bucketIdx !== -1) {
-        const storagePath = originalUrl.substring(bucketIdx + bucket.length + 1);
-        try {
-          const supabase = getSupabase();
-          const { data, error } = await supabase.storage.from(bucket).download(storagePath);
-          if (!error && data) {
-            imageBytes = Buffer.from(await data.arrayBuffer());
-            contentType = data.type || 'image/jpeg';
-            fetchedDirectly = true;
-          }
-        } catch (sErr) {
-          console.warn('Supabase storage SDK download attempt failed, falling back to HTTP fetch:', sErr);
-        }
-      }
-
-      if (!fetchedDirectly) {
-        const fetched = await imageService.fetchImageBytes(originalUrl);
-        imageBytes = fetched.content;
-        contentType = fetched.contentType;
+      const existingImages = await db.getProductImagesByProductId(req.params.product_id);
+      if (existingImages.length > 0) {
+        targetImageId = existingImages[0].id;
+      } else if (product.original_image_url || product.image_url) {
+        const url = product.original_image_url || product.image_url;
+        const imgRec = await db.createProductImage({
+          product_id: req.params.product_id,
+          artisan_id: product.artisan_id,
+          original_image_url: url,
+          mime_type: 'image/jpeg',
+        });
+        targetImageId = imgRec.id;
       }
     }
 
-    // Run sharp enhancement
-    const { content: enhancedBytes, contentType: enhancedType, extension: ext } = 
-      await imageService.enhanceImageBytes(imageBytes, contentType);
+    if (!targetImageId) {
+      throw new BadRequestError('No image available to enhance. Upload an image first.', 'NO_IMAGE_TO_ENHANCE');
+    }
 
-    // Upload enhanced image
-    const enhancedUrl = await storageService.uploadEnhancedImage(
-      req.params.product_id,
-      enhancedBytes,
-      enhancedType,
-      ext
+    const result = await imageService.imageEnhancementService.enhanceImageById(
+      targetImageId,
+      user.user_id,
+      user.role
     );
 
-    // Save database records
-    const updated = await db.updateProduct(req.params.product_id, {
-      original_image_url: originalUrl,
-      enhanced_image_url: enhancedUrl,
-      image_url: enhancedUrl
-    });
+    const updatedProduct = await db.getProductById(req.params.product_id);
 
     res.status(200).json(success({
       product_id: req.params.product_id,
-      original_image_url: originalUrl,
-      enhanced_image_url: enhancedUrl,
-      status: 'enhanced',
-      product: updated,
+      imageId: result.imageId,
+      original_image_url: result.originalImageUrl,
+      enhanced_image_url: result.enhancedImageUrl,
+      status: result.status,
+      analysis: result.analysis,
+      product: updatedProduct,
       message: 'Image enhanced successfully'
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Select Image (POST /products/:id/images/:imageId/select) ────────────────
+router.post('/:product_id/images/:image_id/select', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    await verifyOwnership(req.params.product_id, user.user_id, user.role);
+
+    const selection = req.body.selection === 'original' ? 'original' : 'enhanced';
+    const updatedImage = await imageService.imageEnhancementService.selectImage(
+      req.params.image_id,
+      selection,
+      user.user_id,
+      user.role
+    );
+
+    const product = await db.getProductById(req.params.product_id);
+
+    res.status(200).json(success({
+      imageId: updatedImage.id,
+      selectedImageUrl: updatedImage.selected_image_url,
+      selection,
+      product,
+      message: `Selected ${selection} photo for product listing.`
     }));
   } catch (error) {
     next(error);
@@ -285,7 +368,7 @@ router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('fi
       throw new BadRequestError('No file uploaded', 'MISSING_FILE');
     }
 
-    const language = req.body.language; // optional language hint
+    const language = req.body.language;
 
     // Validate and read audio file
     const { content, contentType, extension } = await imageService.validateAndReadAudio(req.file);
@@ -298,8 +381,8 @@ router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('fi
       contentType
     );
 
-    // Transcribe audio using speech service
-    const { transcript, language: detectedLanguage } = await speechService.transcribeAudio(
+    // Transcribe audio and auto-translate any regional language speech to fluent English text
+    const { transcript, rawTranscript, language: detectedLanguage } = await speechService.transcribeAudio(
       content,
       contentType,
       language
@@ -315,14 +398,16 @@ router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('fi
     res.status(200).json(success({
       product_id: req.params.product_id,
       transcript,
+      raw_transcript: rawTranscript || transcript,
       voice_language: detectedLanguage,
       product: updated,
-      message: 'Voice transcribed and saved successfully'
+      message: 'Voice transcribed and converted to English successfully'
     }));
   } catch (error) {
     next(error);
   }
 });
+
 
 // ─── Generate Catalog (POST /products/:id/generate-catalog) ─────────────────
 router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -336,7 +421,7 @@ router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async 
       throw new OwnershipError('product');
     }
 
-    const imageUrl = product.image_url;
+    const imageUrl = product.selected_image_url || product.primary_image_url || product.enhanced_image_url || product.image_url || product.original_image_url;
     const transcript = product.voice_transcript;
 
     if (!imageUrl && !transcript) {
@@ -352,8 +437,15 @@ router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async 
       district: artisan.district,
     };
 
-    // Run catalog generation via LLM
-    const catalog = await llmService.generateCatalog(imageUrl, transcript, artisanContext);
+    // Check if we have visual analysis stored in product_images
+    let visualAnalysis: any = null;
+    const images = await db.getProductImagesByProductId(req.params.product_id);
+    if (images.length > 0 && images[0].analysis_result) {
+      visualAnalysis = images[0].analysis_result;
+    }
+
+    // Run catalog generation with Qwen / Gemini 2.5 Flash
+    const catalog = await llmService.generateCatalog(imageUrl, transcript, artisanContext, visualAnalysis);
 
     // Save results to product
     const updatePayload = {
@@ -367,10 +459,27 @@ router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async 
       keywords: catalog.keywords,
       ai_generated: true,
       ai_confidence: catalog.confidence,
-      status: 'review', // Moves to review status
+      status: 'review',
     };
 
     const updatedProduct = await db.updateProduct(req.params.product_id, updatePayload);
+
+    // Save English and Hindi default translations
+    await db.saveProductTranslation(req.params.product_id, 'en', {
+      title: catalog.product_name,
+      short_description: catalog.description_en.substring(0, 150),
+      description: catalog.description_en,
+      keywords: catalog.keywords,
+    });
+
+    if (catalog.description_hi) {
+      await db.saveProductTranslation(req.params.product_id, 'hi', {
+        title: catalog.product_name,
+        short_description: catalog.description_hi.substring(0, 150),
+        description: catalog.description_hi,
+        keywords: catalog.keywords,
+      });
+    }
 
     res.status(200).json(success({
       product_id: req.params.product_id,
@@ -379,6 +488,86 @@ router.post('/:product_id/generate-catalog', requireAuth, requireArtisan, async 
       product: updatedProduct,
       message: 'Catalog generated successfully. Please review the details and publish.'
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Multilingual Translation (POST /products/:id/translate) ────────────────
+router.post('/:product_id/translate', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const product = await db.getProductById(req.params.product_id);
+    const { translateText } = await import('../services/translation');
+    const targetLanguages: { code: string; name: string }[] = [
+      { code: 'hi', name: 'Hindi' },
+      { code: 'ta', name: 'Tamil' },
+      { code: 'te', name: 'Telugu' },
+      { code: 'bn', name: 'Bengali' },
+      { code: 'mr', name: 'Marathi' },
+    ];
+
+    const sourceText = product.description_en || product.name || '';
+    const translatedResults: Record<string, any> = {};
+
+    for (const lang of targetLanguages) {
+      try {
+        const translatedDesc = await translateText(sourceText, 'en-IN', `${lang.code}-IN`);
+        const translatedTitle = await translateText(product.name, 'en-IN', `${lang.code}-IN`);
+        
+        await db.saveProductTranslation(req.params.product_id, lang.code, {
+          title: translatedTitle,
+          description: translatedDesc,
+          short_description: translatedDesc.substring(0, 150),
+          keywords: product.keywords,
+        });
+
+        translatedResults[lang.code] = {
+          title: translatedTitle,
+          description: translatedDesc,
+        };
+      } catch (tErr) {
+        console.warn(`Translation to ${lang.code} failed:`, tErr);
+      }
+    }
+
+    res.status(200).json(success({
+      product_id: req.params.product_id,
+      translations: translatedResults,
+      message: 'Multilingual catalog translations generated and saved successfully.'
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Get Stored Translations (GET /products/:id/translations) ───────────────
+router.get('/:product_id/translations', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const translations = await db.getProductTranslations(req.params.product_id);
+    res.status(200).json(success(translations));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Marketplace Export (GET /products/:id/export/:marketplace) ─────────────
+router.get('/:product_id/export/:marketplace', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const product = await db.getProductById(req.params.product_id);
+
+    if (user.role === 'artisan') {
+      const artisan = await db.getArtisanByUserId(user.user_id);
+      if (!artisan || artisan.id !== product.artisan_id) {
+        throw new ForbiddenError('You can only export your own products');
+      }
+    }
+
+    const marketplace = req.params.marketplace.toLowerCase() as 'amazon' | 'flipkart' | 'gem';
+    const { MarketplaceExportService } = await import('../services/marketplace');
+    const exportPayload = MarketplaceExportService.exportProduct(product, marketplace);
+
+    res.status(200).json(success(exportPayload));
   } catch (error) {
     next(error);
   }
@@ -396,7 +585,6 @@ router.put('/:product_id/catalog', requireAuth, requireArtisan, async (req: Auth
       return res.status(200).json(success(product));
     }
 
-    // Map frontend fields to database fields if necessary
     const fieldMapping: Record<string, string> = {
       product_name: 'name',
       description_en: 'description_en',
@@ -406,6 +594,9 @@ router.put('/:product_id/catalog', requireAuth, requireArtisan, async (req: Auth
       craft_type: 'craft_type',
       region: 'region',
       keywords: 'keywords',
+      image_url: 'image_url',
+      primary_image_url: 'primary_image_url',
+      selected_image_url: 'selected_image_url',
     };
 
     const dbUpdate: Record<string, any> = {};
@@ -471,7 +662,7 @@ router.post('/:product_id/publish', requireAuth, requireArtisan, requireVerified
     const product = await db.getProductById(req.params.product_id);
 
     // Validate required fields
-    if (!product.image_url && !product.original_image_url && !product.enhanced_image_url) {
+    if (!product.image_url && !product.original_image_url && !product.enhanced_image_url && !product.primary_image_url) {
       throw new BadRequestError('Cannot publish product: photo is missing.', 'MISSING_PHOTO');
     }
     if (!product.name || product.name === 'Untitled Craft Draft') {
@@ -497,3 +688,4 @@ router.post('/:product_id/publish', requireAuth, requireArtisan, requireVerified
 });
 
 export default router;
+

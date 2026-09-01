@@ -175,7 +175,8 @@ const parseAndValidateCatalog = (rawText: string): AICatalogOutput => {
 const generateCatalogQwen = async (
   imageUrl?: string,
   transcript?: string,
-  artisanContext?: Record<string, any>
+  artisanContext?: Record<string, any>,
+  visualAnalysis?: Record<string, any>
 ): Promise<AICatalogOutput> => {
   if (!config.VLLM_BASE_URL) {
     throw new AIServiceError('Qwen/vLLM base URL is not configured');
@@ -184,6 +185,12 @@ const generateCatalogQwen = async (
   const content: any[] = [];
   if (imageUrl) {
     content.push({ type: 'image_url', image_url: { url: imageUrl } });
+  }
+  if (visualAnalysis?.product) {
+    content.push({
+      type: 'text',
+      text: `Visual Analysis - Detected Product Type: ${visualAnalysis.product.type || 'Craft'}, Category: ${visualAnalysis.product.category || 'Handicraft'}, Material: ${visualAnalysis.product.material || 'Natural'}, Colors: ${(visualAnalysis.product.colors || []).join(', ')}.`,
+    });
   }
   if (transcript) {
     content.push({ type: 'text', text: `Artisan description: ${transcript}` });
@@ -299,7 +306,8 @@ const fetchImageBase64 = async (url: string): Promise<{ data: string; mimeType: 
 const generateCatalogGemini = async (
   imageUrl?: string,
   transcript?: string,
-  artisanContext?: Record<string, any>
+  artisanContext?: Record<string, any>,
+  visualAnalysis?: Record<string, any>
 ): Promise<AICatalogOutput> => {
   if (!config.GEMINI_API_KEY) {
     throw new AIServiceError('Gemini API key is not configured');
@@ -320,6 +328,12 @@ const generateCatalogGemini = async (
       console.warn('Failed to fetch image for Gemini inline data, sending URL text instead:', e);
       parts.push({ text: `Product image URL: ${imageUrl}` });
     }
+  }
+
+  if (visualAnalysis?.product) {
+    parts.push({
+      text: `Visual Analysis - Product Type: ${visualAnalysis.product.type || 'Artisan Product'}, Category: ${visualAnalysis.product.category || 'Handicraft'}, Craft: ${visualAnalysis.product.craftType || 'Traditional Craft'}, Material: ${visualAnalysis.product.material || 'Natural'}, Colors: ${(visualAnalysis.product.colors || []).join(', ')}.`,
+    });
   }
 
   if (transcript) {
@@ -417,30 +431,32 @@ const generateTextGemini = async (prompt: string, system?: string): Promise<stri
 export const generateCatalog = async (
   imageUrl?: string,
   transcript?: string,
-  artisanContext?: Record<string, any>
+  artisanContext?: Record<string, any>,
+  visualAnalysis?: Record<string, any>
 ): Promise<AICatalogOutput> => {
   const isQwenPreferred = config.LLM_PROVIDER === 'qwen';
   
   if (isQwenPreferred && config.VLLM_BASE_URL) {
     try {
       console.log('Generating catalog via Qwen...');
-      return await generateCatalogQwen(imageUrl, transcript, artisanContext);
+      return await generateCatalogQwen(imageUrl, transcript, artisanContext, visualAnalysis);
     } catch (e) {
       console.warn('Qwen catalog generation failed, falling back to Gemini:', e);
       if (config.GEMINI_API_KEY) {
-        return await generateCatalogGemini(imageUrl, transcript, artisanContext);
+        return await generateCatalogGemini(imageUrl, transcript, artisanContext, visualAnalysis);
       }
       throw e;
     }
   }
 
   if (config.GEMINI_API_KEY) {
-    console.log('Generating catalog via Gemini...');
-    return await generateCatalogGemini(imageUrl, transcript, artisanContext);
+    console.log('Generating catalog via Gemini 2.5 Flash...');
+    return await generateCatalogGemini(imageUrl, transcript, artisanContext, visualAnalysis);
   }
 
   throw new AIServiceError('No AI provider configured for catalog generation. Please set VLLM_BASE_URL or GEMINI_API_KEY.');
 };
+
 
 export const generateBuyerSummary = async (requirementText: string): Promise<string> => {
   const isQwenPreferred = config.LLM_PROVIDER === 'qwen';
