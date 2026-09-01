@@ -3,7 +3,7 @@ import { config } from '../config';
 
 const router = Router();
 
-router.get('/health', (req: Request, res: Response) => {
+const handleHealthCheck = (req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
     service: 'Artisera API',
@@ -11,6 +11,10 @@ router.get('/health', (req: Request, res: Response) => {
     environment: config.ENVIRONMENT,
     timestamp: new Date().toISOString()
   });
-});
+};
+
+router.get('/', handleHealthCheck);
+router.get('/health', handleHealthCheck);
 
 export default router;
+
