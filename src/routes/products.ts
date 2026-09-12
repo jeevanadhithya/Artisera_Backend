@@ -135,8 +135,8 @@ router.delete('/:product_id', requireAuth, requireArtisan, async (req: Authentic
   }
 });
 
-// ─── Publish Product (POST /products/:id/publish) ────────────────────────────
-router.post('/:product_id/publish', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// ─── Publish Product (POST & PUT /products/:id/publish) ──────────────────────
+const handleProductPublish = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     const product = await verifyOwnership(req.params.product_id, user.user_id, user.role);
@@ -153,7 +153,10 @@ router.post('/:product_id/publish', requireAuth, requireArtisan, async (req: Aut
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.post('/:product_id/publish', requireAuth, requireArtisan, handleProductPublish);
+router.put('/:product_id/publish', requireAuth, requireArtisan, handleProductPublish);
 
 // ─── Upload Image (POST /products/:id/images and /products/:id/image) ───────
 const handleImageUpload = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -358,8 +361,8 @@ router.post('/:product_id/images/:image_id/select', requireAuth, requireArtisan,
   }
 });
 
-// ─── Upload Voice (POST /products/:id/voice) ──────────────────────────────────
-router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// ─── Upload Voice & Audio (POST /products/:id/voice & /audio) ─────────────────
+const handleVoiceAudioUpload = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     await verifyOwnership(req.params.product_id, user.user_id, user.role);
@@ -406,7 +409,10 @@ router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('fi
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.post('/:product_id/voice', requireAuth, requireArtisan, upload.single('file'), handleVoiceAudioUpload);
+router.post('/:product_id/audio', requireAuth, requireArtisan, upload.single('file'), handleVoiceAudioUpload);
 
 
 // ─── Generate Catalog (POST /products/:id/generate-catalog) ─────────────────
@@ -612,8 +618,8 @@ router.put('/:product_id/catalog', requireAuth, requireArtisan, async (req: Auth
   }
 });
 
-// ─── Get Product Price Recommendation (GET /products/:id/price) ──────────────
-router.get('/:product_id/price', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// ─── Get Product Price Recommendation (GET & POST /products/:id/price & /fair-price) ─
+const handleProductPricing = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
     const product = await db.getProductById(req.params.product_id);
@@ -625,12 +631,13 @@ router.get('/:product_id/price', requireAuth, async (req: AuthenticatedRequest, 
       }
     }
 
-    const material_cost = parseFloat(req.query.material_cost as string || '0');
-    const labor_cost = parseFloat(req.query.labor_cost as string || '0');
-    const production_cost = parseFloat(req.query.production_cost as string || '0');
-    const market_price_low = req.query.market_price_low ? parseFloat(req.query.market_price_low as string) : product.minimum_price;
-    const market_price_high = req.query.market_price_high ? parseFloat(req.query.market_price_high as string) : product.maximum_price;
-    const demand_score = req.query.demand_score ? parseFloat(req.query.demand_score as string) : null;
+    const params = { ...req.query, ...req.body };
+    const material_cost = parseFloat((params.material_cost ?? '0').toString());
+    const labor_cost = parseFloat((params.labor_cost ?? '0').toString());
+    const production_cost = parseFloat((params.production_cost ?? '0').toString());
+    const market_price_low = params.market_price_low ? parseFloat(params.market_price_low.toString()) : product.minimum_price;
+    const market_price_high = params.market_price_high ? parseFloat(params.market_price_high.toString()) : product.maximum_price;
+    const demand_score = params.demand_score ? parseFloat(params.demand_score.toString()) : null;
 
     const result = pricingService.calculatePrice({
       material_cost,
@@ -651,7 +658,12 @@ router.get('/:product_id/price', requireAuth, async (req: AuthenticatedRequest, 
   } catch (error) {
     next(error);
   }
-});
+};
+
+router.get('/:product_id/price', requireAuth, handleProductPricing);
+router.post('/:product_id/price', requireAuth, handleProductPricing);
+router.get('/:product_id/fair-price', requireAuth, handleProductPricing);
+router.post('/:product_id/fair-price', requireAuth, handleProductPricing);
 
 // ─── Publish Product (POST /products/:id/publish) ─────────────────────────────
 router.post('/:product_id/publish', requireAuth, requireArtisan, requireVerifiedProfile, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
