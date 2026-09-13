@@ -281,6 +281,25 @@ export const updateProduct = async (productId: string, data: Record<string, any>
 };
 
 export const deleteProduct = async (productId: string): Promise<void> => {
+  // Cascading deletion of child records to prevent foreign key constraint violations
+  try {
+    await query(`DELETE FROM public.product_images WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
+  try {
+    await query(`DELETE FROM public.product_translations WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
+  try {
+    await query(`DELETE FROM public.product_scores WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
+  try {
+    await query(`DELETE FROM public.marketing_assets WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
+  try {
+    await query(`DELETE FROM public.wishlists WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
+  try {
+    await query(`DELETE FROM public.proposals WHERE product_id = $1;`, [productId]);
+  } catch (_) {}
   await query(`DELETE FROM public.products WHERE id = $1;`, [productId]);
 };
 
