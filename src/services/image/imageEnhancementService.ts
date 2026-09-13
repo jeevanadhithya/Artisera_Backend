@@ -5,6 +5,12 @@ import * as storageService from '../storage';
 import * as db from '../db';
 import { BadRequestError, NotFoundError, StorageError, ValidationError } from '../../types/errors';
 
+export interface CustomEnhancementOptions {
+  backgroundStyle?: 'warm_ivory' | 'pure_white' | 'earth_neutral' | 'transparent';
+  addShadow?: boolean;
+  aspectRatio?: '1:1' | '4:5' | '16:9' | 'original';
+}
+
 export class ImageEnhancementService {
   private analysisProvider: GeminiAnalysisProvider;
   private processingProvider: FreeImageProcessingProvider;
@@ -18,9 +24,14 @@ export class ImageEnhancementService {
   }
 
   /**
-   * Enhances an existing product image record by ID
+   * Enhances an existing product image record by ID with customizable studio options
    */
-  public async enhanceImageById(imageId: string, userId: string, userRole: string): Promise<EnhancementResult> {
+  public async enhanceImageById(
+    imageId: string,
+    userId: string,
+    userRole: string,
+    options?: CustomEnhancementOptions
+  ): Promise<EnhancementResult> {
     const imageRecord = await db.getProductImageById(imageId);
     if (!imageRecord) {
       throw new NotFoundError('Product image record', imageId);
@@ -71,7 +82,7 @@ export class ImageEnhancementService {
         imageQuality: { background: 'Neutral', lighting: 'Even', exposure: 'Normal', sharpness: 'Standard', composition: 'Centered' },
         enhancement: {
           backgroundCleanup: true,
-          backgroundRemoval: false,
+          backgroundRemoval: options?.backgroundStyle === 'transparent',
           brightnessCorrection: true,
           contrastAdjustment: true,
           whiteBalance: true,
@@ -84,13 +95,16 @@ export class ImageEnhancementService {
       };
     }
 
-    // 2. Perform Pixel Processing with Free Provider (Sharp)
+    // 2. Perform Studio Transformation (Python Worker or Built-in Sharp)
     let processedResult;
     try {
       processedResult = await this.processingProvider.processImage({
         imageBytes: originalBytes,
         contentType: originalContentType,
         operations: analysis.enhancement,
+        backgroundStyle: options?.backgroundStyle || 'warm_ivory',
+        addShadow: options?.addShadow !== undefined ? options.addShadow : true,
+        aspectRatio: options?.aspectRatio || '1:1',
       });
     } catch (procErr: any) {
       console.error(`Enhancement pixel transformation failed for image ${imageId}:`, procErr);
@@ -109,7 +123,7 @@ export class ImageEnhancementService {
       throw new ValidationError(`Enhanced image failed quality validation: ${validation.error}`);
     }
 
-    // 4. Upload Enhanced Image to Supabase Storage: products/{artisanId}/{productId}/enhanced/{imageId}.jpg
+    // 4. Upload Enhanced Image to Supabase Storage
     let enhancedUrl: string;
     try {
       enhancedUrl = await storageService.uploadEnhancedProductImage({
@@ -135,7 +149,7 @@ export class ImageEnhancementService {
       throw new Error('Enhanced image storage resulted in collision with original image URL.');
     }
 
-    // 5. Update Database Record
+    // 5. Update Database Records
     const updatedRecord = await db.updateProductImage(imageId, {
       enhanced_image_url: enhancedUrl,
       processing_status: 'completed',
@@ -149,6 +163,30 @@ export class ImageEnhancementService {
       enhanced_image_url: enhancedUrl,
     });
 
+    // Record in ai_generation_jobs table
+    try {
+      await db.createAiGenerationJob({
+        product_id: imageRecord.product_id,
+        artisan_id: imageRecord.artisan_id,
+        job_type: 'image_enhancement',
+        status: 'completed',
+        input_payload: {
+          image_id: imageId,
+          options,
+        },
+        output_payload: {
+          enhanced_image_url: enhancedUrl,
+          width: processedResult.width,
+          height: processedResult.height,
+          background_style: processedResult.backgroundStyle,
+          aspect_ratio: processedResult.aspectRatio,
+          shadow_applied: processedResult.shadowApplied,
+        },
+      });
+    } catch (jobErr) {
+      console.warn('Could not record ai_generation_job:', jobErr);
+    }
+
     return {
       imageId: imageRecord.id,
       originalImageUrl: imageRecord.original_image_url,
@@ -158,6 +196,74 @@ export class ImageEnhancementService {
       analysis,
       mimeType: processedResult.contentType,
       fileSize: processedResult.fileSize,
+      backgroundStyle: processedResult.backgroundStyle,
+      aspectRatio: processedResult.aspectRatio,
+      shadowApplied: processedResult.shadowApplied,
+    };
+  }
+
+  /**
+   * Enhances a product's primary image directly by product ID
+   */
+  public async enhanceProductImage(
+    productId: string,
+    userId: string,
+    userRole: string,
+    options?: CustomEnhancementOptions
+  ): Promise<EnhancementResult> {
+    const product = await db.getProductById(productId);
+    if (!product) {
+      throw new NotFoundError('Product', productId);
+    }
+
+    let imageRecords = await db.getProductImagesByProductId(productId);
+    let targetImage = imageRecords && imageRecords.length > 0 ? imageRecords[0] : null;
+
+    // If no product_images record exists but product has a primary image, create one
+    if (!targetImage && (product.primary_image_url || product.image_url)) {
+      const sourceUrl = product.primary_image_url || product.image_url;
+      targetImage = await db.createProductImage({
+        product_id: productId,
+        artisan_id: product.artisan_id,
+        original_image_url: sourceUrl,
+        processing_status: 'pending',
+      });
+    }
+
+    if (!targetImage) {
+      throw new BadRequestError('Product does not have an original image to enhance.');
+    }
+
+    const result = await this.enhanceImageById(targetImage.id, userId, userRole, options);
+
+    // Update product record with enhanced image
+    await db.updateProduct(productId, {
+      enhanced_image_url: result.enhancedImageUrl,
+    });
+
+    return result;
+  }
+
+  /**
+   * Retrieves comparison details for before/after preview
+   */
+  public async getProductEnhancedPreview(productId: string): Promise<any> {
+    const product = await db.getProductById(productId);
+    if (!product) {
+      throw new NotFoundError('Product', productId);
+    }
+
+    const images = await db.getProductImagesByProductId(productId);
+    const primaryImage = images && images.length > 0 ? images[0] : null;
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      originalImageUrl: primaryImage?.original_image_url || product.primary_image_url || product.image_url,
+      enhancedImageUrl: primaryImage?.enhanced_image_url || product.enhanced_image_url,
+      selectedImageUrl: primaryImage?.selected_image_url || product.selected_image_url || product.image_url,
+      status: primaryImage?.processing_status || (product.enhanced_image_url ? 'completed' : 'pending'),
+      analysis: primaryImage?.analysis_result,
     };
   }
 

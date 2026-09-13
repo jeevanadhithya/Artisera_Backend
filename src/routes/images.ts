@@ -16,12 +16,21 @@ router.post('/:imageId/enhance', requireAuth, requireArtisan, async (req: Authen
     const user = req.user!;
     const imageId = req.params.imageId;
 
-    const result = await imageEnhancementService.enhanceImageById(imageId, user.user_id, user.role);
+    const { background_style, add_shadow, aspect_ratio } = req.body || {};
+
+    const result = await imageEnhancementService.enhanceImageById(imageId, user.user_id, user.role, {
+      backgroundStyle: background_style,
+      addShadow: add_shadow,
+      aspectRatio: aspect_ratio,
+    });
 
     res.status(200).json(success({
       imageId: result.imageId,
       originalImageUrl: result.originalImageUrl,
       enhancedImageUrl: result.enhancedImageUrl,
+      backgroundStyle: result.backgroundStyle,
+      aspectRatio: result.aspectRatio,
+      shadowApplied: result.shadowApplied,
       status: result.status,
       analysis: result.analysis,
       message: 'Image enhanced successfully with AI visual intelligence studio.',

@@ -63,3 +63,42 @@ export const translateToHindi = async (
 ): Promise<string> => {
   return translateText(text, sourceLanguageCode, 'hi-IN');
 };
+
+export const ARTISERA_LANGUAGES = [
+  { code: 'hi', bcp47: 'hi-IN', name: 'Hindi', native: 'हिन्दी' },
+  { code: 'bn', bcp47: 'bn-IN', name: 'Bengali', native: 'বাংলা' },
+  { code: 'te', bcp47: 'te-IN', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'ta', bcp47: 'ta-IN', name: 'Tamil', native: 'தமிழ்' },
+  { code: 'mr', bcp47: 'mr-IN', name: 'Marathi', native: 'मराठी' },
+  { code: 'kn', bcp47: 'kn-IN', name: 'Kannada', native: 'ಕನ್ನಡ' },
+];
+
+/**
+ * Translate text into the 6 supported Artisera languages concurrently using Sarvam AI
+ */
+export const translateToAllLanguages = async (
+  text: string,
+  sourceLanguageCode: string = 'auto'
+): Promise<Record<string, string>> => {
+  if (!text || !text.trim()) return {};
+
+  const results: Record<string, string> = {};
+
+  const promises = ARTISERA_LANGUAGES.map(async (lang) => {
+    if (sourceLanguageCode === lang.code || sourceLanguageCode === lang.bcp47) {
+      results[lang.code] = text;
+      return;
+    }
+    try {
+      const translated = await translateText(text, sourceLanguageCode, lang.bcp47);
+      if (translated) {
+        results[lang.code] = translated;
+      }
+    } catch (err) {
+      console.warn(`[Sarvam] Failed to translate to ${lang.name} (${lang.code}):`, err);
+    }
+  });
+
+  await Promise.allSettled(promises);
+  return results;
+};

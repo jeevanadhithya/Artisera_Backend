@@ -43,6 +43,16 @@ router.get('/products', getOptionalUser, async (req: AuthenticatedRequest, res: 
   }
 });
 
+// ─── Database-Driven Categories (GET /market/categories) ──────────────────────
+router.get('/categories', async (_req, res: Response, next: NextFunction) => {
+  try {
+    const categories = await db.getCategories();
+    res.status(200).json(success(categories));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ─── GET /market/opportunities/me ─────────────────────────────────────────────
 router.get('/opportunities/me', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {

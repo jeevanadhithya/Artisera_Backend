@@ -132,4 +132,110 @@ CREATE TABLE IF NOT EXISTS public.wishlists (
 ALTER TABLE public.wishlists ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Enable all access for authenticated users" ON public.wishlists FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+-- 8. Unified Profiles Table
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('artisan', 'buyer', 'admin')) DEFAULT 'artisan',
+    full_name TEXT NOT NULL,
+    phone TEXT,
+    avatar_url TEXT,
+    craft_type TEXT,
+    state TEXT,
+    district TEXT,
+    village TEXT,
+    languages TEXT[] DEFAULT ARRAY['en']::text[],
+    years_experience INTEGER DEFAULT 1,
+    craft_story TEXT,
+    production_capacity_monthly INTEGER DEFAULT 10,
+    preferred_buyer_types TEXT[] DEFAULT ARRAY['retail', 'wholesale']::text[],
+    profile_completion_pct INTEGER DEFAULT 20,
+    company_name TEXT,
+    buyer_type TEXT CHECK (buyer_type IS NULL OR buyer_type IN ('retail_consumer', 'boutique', 'interior_designer', 'corporate', 'exporter')),
+    gst_number TEXT,
+    verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 9. Product Scores Table
+CREATE TABLE IF NOT EXISTS public.product_scores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE UNIQUE,
+    overall_score NUMERIC(5, 2) NOT NULL,
+    image_quality_score NUMERIC(5, 2) NOT NULL,
+    catalog_quality_score NUMERIC(5, 2) NOT NULL,
+    discoverability_score NUMERIC(5, 2) NOT NULL,
+    pricing_competitiveness_score NUMERIC(5, 2) NOT NULL,
+    market_fit_score NUMERIC(5, 2) NOT NULL,
+    breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
+    recommendations TEXT[] DEFAULT ARRAY[]::text[],
+    calculated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 10. AI Generation Jobs Table
+CREATE TABLE IF NOT EXISTS public.ai_generation_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    job_type TEXT NOT NULL CHECK (job_type IN (
+      'image_enhancement', 'voice_catalog', 'pricing', 'product_score',
+      'image_variation', 'product_video', 'ai_reel'
+    )),
+    status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'completed', 'failed', 'cancelled')) DEFAULT 'queued',
+    progress_pct INTEGER DEFAULT 0,
+    input_payload JSONB DEFAULT '{}'::jsonb,
+    result_data JSONB DEFAULT '{}'::jsonb,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 11. Buyer Inquiries Table
+CREATE TABLE IF NOT EXISTS public.inquiries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    artisan_id UUID NOT NULL REFERENCES public.artisans(id) ON DELETE CASCADE,
+    buyer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    target_budget_per_unit NUMERIC(10, 2),
+    message TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'proposal_sent', 'accepted', 'declined', 'closed')) DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 12. B2B Proposals Table
+CREATE TABLE IF NOT EXISTS public.proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inquiry_id UUID REFERENCES public.inquiries(id) ON DELETE SET NULL,
+    opportunity_id UUID REFERENCES public.buyer_requests(id) ON DELETE SET NULL,
+    artisan_id UUID NOT NULL REFERENCES public.artisans(id) ON DELETE CASCADE,
+    buyer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    quoted_price_per_unit NUMERIC(10, 2) NOT NULL,
+    total_amount NUMERIC(12, 2) NOT NULL,
+    lead_time_days INTEGER NOT NULL DEFAULT 14,
+    terms_and_notes TEXT,
+    ai_generated BOOLEAN DEFAULT true,
+    artisan_edited BOOLEAN DEFAULT false,
+    status TEXT NOT NULL CHECK (status IN ('draft', 'sent', 'accepted', 'declined')) DEFAULT 'draft',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 13. Marketing Assets Table
+CREATE TABLE IF NOT EXISTS public.marketing_assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    asset_type TEXT NOT NULL CHECK (asset_type IN (
+      'variation_studio', 'variation_festive', 'variation_premium',
+      'product_video', 'ai_reel', 'gem_package_pdf', 'gem_package_csv'
+    )),
+    asset_url TEXT NOT NULL,
+    thumbnail_url TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+
 

@@ -49,6 +49,10 @@ export interface ProcessImageOptions {
   operations: EnhancementOperations;
   maxDimension?: number;
   quality?: number;
+  backgroundStyle?: 'warm_ivory' | 'pure_white' | 'earth_neutral' | 'transparent';
+  addShadow?: boolean;
+  aspectRatio?: '1:1' | '4:5' | '16:9' | 'original';
+  shadowStrength?: number;
 }
 
 export interface ProcessedImageResult {
@@ -58,6 +62,9 @@ export interface ProcessedImageResult {
   width: number;
   height: number;
   fileSize: number;
+  backgroundStyle?: string;
+  aspectRatio?: string;
+  shadowApplied?: boolean;
 }
 
 export interface EnhancementResult {
@@ -69,4 +76,7 @@ export interface EnhancementResult {
   analysis: GeminiImageAnalysis;
   mimeType: string;
   fileSize: number;
+  backgroundStyle?: string;
+  aspectRatio?: string;
+  shadowApplied?: boolean;
 }

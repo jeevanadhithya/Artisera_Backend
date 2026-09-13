@@ -284,6 +284,13 @@ export const deleteProduct = async (productId: string): Promise<void> => {
   await query(`DELETE FROM public.products WHERE id = $1;`, [productId]);
 };
 
+export const getCategories = async (): Promise<string[]> => {
+  const rows = await query(
+    `SELECT DISTINCT category FROM public.products WHERE category IS NOT NULL AND TRIM(category) != '' ORDER BY category ASC;`
+  );
+  return rows.map((r: any) => r.category);
+};
+
 export const getAllProducts = async (
   limit: number = 50,
   offset: number = 0,
@@ -575,19 +582,23 @@ export const saveProductTranslation = async (
     short_description?: string;
     description?: string;
     keywords?: string[];
+    pricing_explanation?: string;
+    price_formatted?: string;
   }
 ): Promise<any> => {
   const now = new Date().toISOString();
   const sql = `
     INSERT INTO public.product_translations (
-      product_id, language_code, title, short_description, description, keywords, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      product_id, language_code, title, short_description, description, keywords, pricing_explanation, price_formatted, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     ON CONFLICT (product_id, language_code) 
     DO UPDATE SET 
-      title = EXCLUDED.title,
-      short_description = EXCLUDED.short_description,
-      description = EXCLUDED.description,
-      keywords = EXCLUDED.keywords,
+      title = COALESCE(EXCLUDED.title, public.product_translations.title),
+      short_description = COALESCE(EXCLUDED.short_description, public.product_translations.short_description),
+      description = COALESCE(EXCLUDED.description, public.product_translations.description),
+      keywords = COALESCE(EXCLUDED.keywords, public.product_translations.keywords),
+      pricing_explanation = COALESCE(EXCLUDED.pricing_explanation, public.product_translations.pricing_explanation),
+      price_formatted = COALESCE(EXCLUDED.price_formatted, public.product_translations.price_formatted),
       updated_at = EXCLUDED.updated_at
     RETURNING *;
   `;
@@ -598,6 +609,8 @@ export const saveProductTranslation = async (
     data.short_description || null,
     data.description || null,
     data.keywords || [],
+    data.pricing_explanation || null,
+    data.price_formatted || null,
     now,
     now,
   ]);
@@ -616,4 +629,216 @@ export const getProductTranslation = async (productId: string, languageCode: str
     [productId, languageCode]
   );
 };
+
+// ─── Profiles ─────────────────────────────────────────────────────────────────
+
+export const getProfileByUserId = async (userId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.profiles WHERE id = $1;`, [userId]);
+};
+
+export const upsertProfile = async (userId: string, data: Record<string, any>): Promise<any> => {
+  const now = new Date().toISOString();
+  const existing = await getProfileByUserId(userId);
+  if (existing) {
+    const { sql, values } = buildUpdateQuery('profiles', userId, { ...data, updated_at: now });
+    return queryOne(sql, values);
+  } else {
+    const { sql, values } = buildInsertQuery('profiles', {
+      id: userId,
+      role: data.role || 'artisan',
+      full_name: data.full_name || 'Artisan',
+      ...data,
+      created_at: now,
+      updated_at: now,
+    });
+    return queryOne(sql, values);
+  }
+};
+
+// ─── Product Scores ───────────────────────────────────────────────────────────
+
+export const getProductScore = async (productId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.product_scores WHERE product_id = $1;`, [productId]);
+};
+
+export const upsertProductScore = async (productId: string, data: Record<string, any>): Promise<any> => {
+  const sql = `
+    INSERT INTO public.product_scores (
+      product_id, overall_score, image_quality_score, catalog_quality_score,
+      discoverability_score, pricing_competitiveness_score, market_fit_score,
+      breakdown, recommendations, calculated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT (product_id)
+    DO UPDATE SET
+      overall_score = EXCLUDED.overall_score,
+      image_quality_score = EXCLUDED.image_quality_score,
+      catalog_quality_score = EXCLUDED.catalog_quality_score,
+      discoverability_score = EXCLUDED.discoverability_score,
+      pricing_competitiveness_score = EXCLUDED.pricing_competitiveness_score,
+      market_fit_score = EXCLUDED.market_fit_score,
+      breakdown = EXCLUDED.breakdown,
+      recommendations = EXCLUDED.recommendations,
+      calculated_at = EXCLUDED.calculated_at
+    RETURNING *;
+  `;
+  return queryOne(sql, [
+    productId,
+    data.overall_score || 0,
+    data.image_quality_score || 0,
+    data.catalog_quality_score || 0,
+    data.discoverability_score || 0,
+    data.pricing_competitiveness_score || 0,
+    data.market_fit_score || 0,
+    JSON.stringify(data.breakdown || {}),
+    data.recommendations || [],
+    new Date().toISOString()
+  ]);
+};
+
+// ─── AI Generation Jobs ───────────────────────────────────────────────────────
+
+export const createAiJob = async (data: {
+  user_id: string;
+  product_id?: string;
+  job_type: string;
+  input_payload?: any;
+}): Promise<any> => {
+  const { sql, values } = buildInsertQuery('ai_generation_jobs', {
+    user_id: data.user_id,
+    product_id: data.product_id || null,
+    job_type: data.job_type,
+    status: 'queued',
+    progress_pct: 0,
+    input_payload: JSON.stringify(data.input_payload || {}),
+    result_data: JSON.stringify({}),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
+export const getAiJobById = async (jobId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.ai_generation_jobs WHERE id = $1;`, [jobId]);
+};
+
+export const updateAiJobStatus = async (
+  jobId: string,
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled',
+  progressPct = 0,
+  resultData?: any,
+  errorMessage?: string
+): Promise<any> => {
+  const updateData: Record<string, any> = {
+    status,
+    progress_pct: progressPct,
+    updated_at: new Date().toISOString(),
+  };
+  if (resultData !== undefined) {
+    updateData.result_data = JSON.stringify(resultData);
+  }
+  if (errorMessage !== undefined) {
+    updateData.error_message = errorMessage;
+  }
+  const { sql, values } = buildUpdateQuery('ai_generation_jobs', jobId, updateData);
+  return queryOne(sql, values);
+};
+
+// ─── Inquiries & Proposals ───────────────────────────────────────────────────
+
+export const createInquiry = async (data: Record<string, any>): Promise<any> => {
+  const { sql, values } = buildInsertQuery('inquiries', {
+    ...data,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
+export const getInquiriesByArtisan = async (artisanId: string): Promise<any[]> => {
+  return query(
+    `SELECT i.*, p.name as product_name, p.primary_image_url as product_image, pr.full_name as buyer_name
+     FROM public.inquiries i
+     LEFT JOIN public.products p ON p.id = i.product_id
+     LEFT JOIN public.profiles pr ON pr.id = i.buyer_id
+     WHERE i.artisan_id = $1
+     ORDER BY i.created_at DESC;`,
+    [artisanId]
+  );
+};
+
+export const getInquiriesByBuyer = async (buyerId: string): Promise<any[]> => {
+  return query(
+    `SELECT i.*, p.name as product_name, p.primary_image_url as product_image, a.name as artisan_name
+     FROM public.inquiries i
+     LEFT JOIN public.products p ON p.id = i.product_id
+     LEFT JOIN public.artisans a ON a.id = i.artisan_id
+     WHERE i.buyer_id = $1
+     ORDER BY i.created_at DESC;`,
+    [buyerId]
+  );
+};
+
+export const getInquiryById = async (inquiryId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.inquiries WHERE id = $1;`, [inquiryId]);
+};
+
+export const createProposal = async (data: Record<string, any>): Promise<any> => {
+  const { sql, values } = buildInsertQuery('proposals', {
+    ...data,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
+export const getProposalsByArtisan = async (artisanId: string): Promise<any[]> => {
+  return query(
+    `SELECT pr.*, p.name as product_name, p.primary_image_url as product_image
+     FROM public.proposals pr
+     LEFT JOIN public.products p ON p.id = pr.product_id
+     WHERE pr.artisan_id = $1
+     ORDER BY pr.created_at DESC;`,
+    [artisanId]
+  );
+};
+
+export const getProposalById = async (proposalId: string): Promise<any | null> => {
+  return queryOne(`SELECT * FROM public.proposals WHERE id = $1;`, [proposalId]);
+};
+
+export const updateProposal = async (proposalId: string, data: Record<string, any>): Promise<any> => {
+  const { sql, values } = buildUpdateQuery('proposals', proposalId, {
+    ...data,
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
+// ─── AI Generation Jobs ───────────────────────────────────────────────────────
+
+export const createAiGenerationJob = async (data: Record<string, any>): Promise<any> => {
+  const { sql, values } = buildInsertQuery('ai_generation_jobs', {
+    ...data,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
+export const getAiGenerationJobs = async (productId: string): Promise<any[]> => {
+  return query(
+    `SELECT * FROM public.ai_generation_jobs WHERE product_id = $1 ORDER BY created_at DESC;`,
+    [productId]
+  );
+};
+
+export const updateAiJob = async (jobId: string, data: Record<string, any>): Promise<any> => {
+  const { sql, values } = buildUpdateQuery('ai_generation_jobs', jobId, {
+    ...data,
+    updated_at: new Date().toISOString(),
+  });
+  return queryOne(sql, values);
+};
+
 
