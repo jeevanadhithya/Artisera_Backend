@@ -102,7 +102,7 @@ export class ImageEnhancementService {
         imageBytes: originalBytes,
         contentType: originalContentType,
         operations: analysis.enhancement,
-        backgroundStyle: options?.backgroundStyle || 'warm_ivory',
+        backgroundStyle: options?.backgroundStyle || 'pure_white',
         addShadow: options?.addShadow !== undefined ? options.addShadow : true,
         aspectRatio: options?.aspectRatio || '1:1',
       });

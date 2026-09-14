@@ -21,6 +21,7 @@ import speechRouter from './routes/speech';
 import pricingRouter from './routes/pricing';
 import mlRouter from './routes/ml';
 import { aiRouter } from './routes/ai';
+import copilotRouter from './routes/copilot';
 
 const app = express();
 
@@ -537,6 +538,8 @@ app.use(`${API_PREFIX}/ai`, aiRouter);
 app.use(`${API_PREFIX}/speech`, speechRouter);
 app.use(`${API_PREFIX}/pricing`, pricingRouter);
 app.use(`${API_PREFIX}/ml`, mlRouter);
+app.use(`${API_PREFIX}/copilot`, copilotRouter);
+app.use(`${API_PREFIX}/chatbot`, copilotRouter);
 
 // Fallbacks for direct route matching
 app.use('/health', healthRouter);
@@ -555,6 +558,8 @@ app.use('/ai', aiRouter);
 app.use('/speech', speechRouter);
 app.use('/pricing', pricingRouter);
 app.use('/ml', mlRouter);
+app.use('/copilot', copilotRouter);
+app.use('/chatbot', copilotRouter);
 
 // ─── Global Error Handler ────────────────────────────────────────────────────
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

@@ -306,3 +306,60 @@ export const transcribeAudio = async (
   throw new AIServiceError('No speech-to-text provider is configured. Please set SARVAM_API_KEY or GEMINI_API_KEY.');
 };
 
+// ─── Text-to-Speech Synthesis ───────────────────────────────────────────────
+export const synthesizeSpeech = async (
+  text: string,
+  languageHint: string = 'en-IN',
+  speed: number = 1.0
+): Promise<{ audioBase64: string; contentType: string }> => {
+  if (!text || !text.trim()) {
+    throw new AIServiceError('Text is required for speech synthesis.');
+  }
+
+  const langCode = languageHintToBcp47(languageHint) || 'en-IN';
+
+  if (config.SARVAM_API_KEY) {
+    try {
+      const url = `${config.SARVAM_BASE_URL}/text-to-speech`;
+      const response = await axios.post(
+        url,
+        {
+          inputs: [text.trim().substring(0, 500)],
+          target_language_code: langCode,
+          speaker: 'meera',
+          pitch: 0,
+          pace: Math.max(0.7, Math.min(1.5, speed)),
+          loudness: 1.5,
+          speech_sample_rate: 8000,
+          enable_preprocessing: true,
+          model: 'bulbul:v1',
+        },
+        {
+          headers: {
+            'api-subscription-key': config.SARVAM_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        }
+      );
+
+      const audios = response.data?.audios;
+      if (Array.isArray(audios) && audios.length > 0 && audios[0]) {
+        return {
+          audioBase64: audios[0],
+          contentType: 'audio/wav',
+        };
+      }
+    } catch (ttsErr) {
+      console.warn('Sarvam TTS failed, returning empty base64:', ttsErr);
+    }
+  }
+
+  // Graceful fallback for environments without active TTS key
+  return {
+    audioBase64: '',
+    contentType: 'audio/wav',
+  };
+};
+
+

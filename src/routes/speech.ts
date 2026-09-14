@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuth, getOptionalUser, AuthenticatedRequest } from '../middleware/auth';
 import * as speechService from '../services/speech';
 import * as translationService from '../services/translation';
 import * as imageService from '../services/image';
@@ -15,7 +15,7 @@ const success = (data: any) => ({ success: true, data });
  * Standalone Sarvam AI Speech-to-Text with multi-dialect support
  * Accepts: multipart/form-data 'file' or JSON body { audio_base64, mime_type, language }
  */
-router.post('/transcribe', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/transcribe', getOptionalUser, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     let audioBuffer: Buffer;
     let contentType = 'audio/m4a';
@@ -67,4 +67,27 @@ router.post('/transcribe', requireAuth, upload.single('file'), async (req: Authe
   }
 });
 
+/**
+ * POST /api/speech/synthesize
+ * Sarvam AI Text-to-Speech synthesis
+ * Body: { text: string, language?: string, speed?: number }
+ */
+router.post('/synthesize', async (req, res: Response, next: NextFunction) => {
+  try {
+    const text = req.body?.text;
+    const language = req.body?.language || 'en-IN';
+    const speed = req.body?.speed || 1.0;
+
+    if (!text || typeof text !== 'string') {
+      throw new BadRequestError('Text is required for speech synthesis.');
+    }
+
+    const result = await speechService.synthesizeSpeech(text, language, speed);
+    res.status(200).json(success(result));
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+
