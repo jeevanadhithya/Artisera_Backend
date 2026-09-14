@@ -291,17 +291,32 @@ router.post('/:product_id/images/:image_id/enhance', requireAuth, requireArtisan
     await verifyOwnership(req.params.product_id, user.user_id, user.role);
 
     const { background_style, add_shadow, aspect_ratio } = req.body || {};
+    const imageId = req.params.image_id;
 
-    const result = await imageService.imageEnhancementService.enhanceImageById(
-      req.params.image_id,
-      user.user_id,
-      user.role,
-      {
-        backgroundStyle: background_style,
-        addShadow: add_shadow,
-        aspectRatio: aspect_ratio,
-      }
-    );
+    let result;
+    if (imageId === 'primary' || imageId === 'default' || !imageId) {
+      result = await imageService.imageEnhancementService.enhanceProductImage(
+        req.params.product_id,
+        user.user_id,
+        user.role,
+        {
+          backgroundStyle: background_style,
+          addShadow: add_shadow,
+          aspectRatio: aspect_ratio,
+        }
+      );
+    } else {
+      result = await imageService.imageEnhancementService.enhanceImageById(
+        imageId,
+        user.user_id,
+        user.role,
+        {
+          backgroundStyle: background_style,
+          addShadow: add_shadow,
+          aspectRatio: aspect_ratio,
+        }
+      );
+    }
 
     res.status(200).json(success({
       imageId: result.imageId,
@@ -405,25 +420,50 @@ router.post('/:product_id/enhance-image', requireAuth, requireArtisan, upload.si
 router.post('/:product_id/images/:image_id/select', requireAuth, requireArtisan, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    await verifyOwnership(req.params.product_id, user.user_id, user.role);
+    const product = await verifyOwnership(req.params.product_id, user.user_id, user.role);
 
     const selection = req.body.selection === 'original' ? 'original' : 'enhanced';
-    const updatedImage = await imageService.imageEnhancementService.selectImage(
-      req.params.image_id,
-      selection,
-      user.user_id,
-      user.role
-    );
+    let imageId = req.params.image_id;
 
-    const product = await db.getProductById(req.params.product_id);
+    if (imageId === 'primary' || imageId === 'default' || !imageId) {
+      const images = await db.getProductImagesByProductId(req.params.product_id);
+      if (images && images.length > 0) {
+        imageId = images[0].id;
+      }
+    }
 
-    res.status(200).json(success({
-      imageId: updatedImage.id,
-      selectedImageUrl: updatedImage.selected_image_url,
-      selection,
-      product,
-      message: `Selected ${selection} photo for product listing.`
-    }));
+    if (imageId && imageId !== 'primary' && imageId !== 'default') {
+      const updatedImage = await imageService.imageEnhancementService.selectImage(
+        imageId,
+        selection,
+        user.user_id,
+        user.role
+      );
+      const updatedProd = await db.getProductById(req.params.product_id);
+      return res.status(200).json(success({
+        imageId: updatedImage.id,
+        selectedImageUrl: updatedImage.selected_image_url,
+        selection,
+        product: updatedProd,
+        message: `Selected ${selection} photo for product listing.`
+      }));
+    } else {
+      const selectedUrl = selection === 'enhanced' && product.enhanced_image_url
+        ? product.enhanced_image_url
+        : (product.original_image_url || product.primary_image_url || product.image_url);
+      const updatedProd = await db.updateProduct(req.params.product_id, {
+        selected_image_url: selectedUrl,
+        primary_image_url: selectedUrl,
+        image_url: selectedUrl,
+      });
+      return res.status(200).json(success({
+        imageId: 'primary',
+        selectedImageUrl: selectedUrl,
+        selection,
+        product: updatedProd,
+        message: `Selected ${selection} photo for product listing.`
+      }));
+    }
   } catch (error) {
     next(error);
   }

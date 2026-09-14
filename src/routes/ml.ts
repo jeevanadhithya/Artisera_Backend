@@ -6,6 +6,51 @@ const router = Router();
 const success = (data: any) => ({ success: true, data });
 const processor = new FreeImageProcessingProvider();
 
+// Dynamic AWS URL configuration (can be updated at runtime without restart)
+let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://16.16.99.220:8000';
+
+/**
+ * GET /api/ml/config
+ * Returns current dynamic ML pipeline configuration & active AWS endpoint
+ */
+router.get('/config', (req: Request, res: Response) => {
+  res.status(200).json(success({
+    active_aws_url: dynamicAwsUrl,
+    env_aws_url: process.env.IMAGE_AI_URL || null,
+    timeout_ms: parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '2500', 10),
+    backup_engine: 'Artisera-ML-CV-Studio-v2.0 (Local Sharp + CLAHE + Studio Compositor)',
+    tip: 'To prevent AWS IP changing on restart, associate an Elastic IP (EIP) in AWS EC2 Console, or POST new IP to this endpoint.'
+  }));
+});
+
+/**
+ * POST /api/ml/config
+ * Update the active AWS EC2 IP or URL dynamically at runtime
+ * Body: { aws_url: "http://13.200.x.x:8000" } or { ip: "13.200.x.x" }
+ */
+router.post('/config', (req: Request, res: Response) => {
+  const { aws_url, ip } = req.body || {};
+  let targetUrl = aws_url;
+
+  if (!targetUrl && ip) {
+    const cleanIp = ip.toString().trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    targetUrl = cleanIp.includes(':') ? `http://${cleanIp}` : `http://${cleanIp}:8000`;
+  }
+
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    res.status(400).json({ success: false, error: 'Provide a valid aws_url or ip.' });
+    return;
+  }
+
+  dynamicAwsUrl = targetUrl.trim().replace(/\/+$/, '');
+  console.log(`📡 Dynamic AWS Image AI URL updated to: ${dynamicAwsUrl}`);
+
+  res.status(200).json(success({
+    message: 'AWS Image AI URL updated successfully.',
+    active_aws_url: dynamicAwsUrl,
+  }));
+});
+
 /**
  * GET /api/ml/health
  * Returns status of the ML Computer Vision & AI Pricing pipelines
@@ -20,7 +65,7 @@ router.get('/health', (req: Request, res: Response) => {
       image_enhancement: {
         engine: 'AWS Neural Enhancement + U²-Net Segmentation + CLAHE LAB Contrast + Studio Shadow',
         status: 'online',
-        primary: process.env.IMAGE_AI_URL || 'http://16.16.99.220:8000',
+        primary: dynamicAwsUrl,
         fallback: process.env.IMAGE_AI_BACKUP || 'gemini',
         supported_styles: ['warm_ivory', 'pure_white', 'earth_neutral', 'transparent'],
         aspect_ratios: ['1:1', '4:5', '16:9', 'original'],
@@ -33,7 +78,7 @@ router.get('/health', (req: Request, res: Response) => {
       aws_neural_cloud: {
         engine: 'AWS EC2 Neural Image Enhancement',
         status: 'active',
-        endpoint: process.env.IMAGE_AI_URL || 'http://16.16.99.220:8000',
+        endpoint: dynamicAwsUrl,
       }
     }
   }));
@@ -84,78 +129,93 @@ router.post('/enhance', async (req: Request, res: Response, next: NextFunction) 
     let outContentType = 'image/png';
 
     // ── PRIMARY: AWS EC2 Neural Image Enhancement Server ─────────────────────
-    const awsUrl = process.env.IMAGE_AI_URL || 'http://16.16.99.220:8000';
-    const awsTimeoutMs = parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '30000', 10);
+    const awsUrl = req.body?.aws_url || dynamicAwsUrl;
+    const awsTimeoutMs = parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '2500', 10);
     let awsSuccess = false;
+
+    const detected = detectImageExtension(inputBytes, contentType);
+    const filename = `craft.${detected.ext}`;
 
     try {
       const axios = (await import('axios')).default;
-      const FormData = (await import('form-data')).default;
 
-      const detected = detectImageExtension(inputBytes, contentType);
-      const filename = `craft.${detected.ext}`;
+      // Fast try 1: Base64 JSON endpoint (low latency)
+      try {
+        const jsonResp = await axios.post(`${awsUrl}/enhance-base64`, {
+          image_base64: inputBytes.toString('base64'),
+          filename,
+          background_style,
+          add_shadow: Boolean(add_shadow),
+        }, {
+          timeout: awsTimeoutMs,
+          headers: { 'Content-Type': 'application/json' }
+        });
 
-      const form = new FormData();
-      form.append('image', inputBytes, { filename, contentType });
-      form.append('background_style', background_style);
-      form.append('add_shadow', String(add_shadow));
+        if (jsonResp.data && (jsonResp.data.image_base64 || jsonResp.data.enhanced_image)) {
+          const rawB64 = jsonResp.data.image_base64 || jsonResp.data.enhanced_image;
+          outputB64 = rawB64.startsWith('data:') ? rawB64 : `data:image/png;base64,${rawB64}`;
+          outContentType = 'image/png';
+          engine = 'AWS-EC2-Neural-BiRefNet';
+          awsSuccess = true;
+        }
+      } catch (jsonErr: any) {
+        // If 404 or connection error, try multipart /enhance
+      }
 
-      const resp = await axios.post(`${awsUrl}/enhance`, form, {
-        headers: form.getHeaders(),
-        timeout: awsTimeoutMs,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-      });
+      // Fast try 2: Multipart /enhance endpoint (supplying both 'images' and 'image' fields)
+      if (!awsSuccess) {
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('images', inputBytes, { filename, contentType });
+        form.append('image', inputBytes, { filename, contentType });
+        form.append('background_style', background_style);
+        form.append('add_shadow', String(add_shadow));
 
-      // Normalize response — AWS may return various shapes
-      const respData = resp.data;
-      if (respData) {
-        // Shape 1: { success: true, images: [{ image_base64, content_type }] }
-        if (respData.success && Array.isArray(respData.images) && respData.images.length > 0) {
-          const item = respData.images[0];
-          const rawB64 = item.image_base64 || item.enhanced_image_base64 || '';
-          if (rawB64) {
-            outputB64 = rawB64.startsWith('data:')
-              ? rawB64
-              : `data:${item.content_type || 'image/png'};base64,${rawB64}`;
-            outContentType = item.content_type || 'image/png';
-            width = item.width || 1000;
-            height = item.height || 1000;
-            fileSize = item.file_size || inputBytes.length;
+        const resp = await axios.post(`${awsUrl}/enhance`, form, {
+          headers: form.getHeaders(),
+          timeout: awsTimeoutMs,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        });
+
+        const respData = resp.data;
+        if (respData) {
+          if (respData.success && Array.isArray(respData.images) && respData.images.length > 0) {
+            const item = respData.images[0];
+            const rawB64 = item.image_base64 || item.enhanced_image_base64 || '';
+            if (rawB64) {
+              outputB64 = rawB64.startsWith('data:') ? rawB64 : `data:${item.content_type || 'image/png'};base64,${rawB64}`;
+              outContentType = item.content_type || 'image/png';
+              width = item.width || 1000;
+              height = item.height || 1000;
+              fileSize = item.file_size || inputBytes.length;
+              engine = 'AWS-EC2-Neural-Enhancement';
+              awsSuccess = true;
+            }
+          } else if (respData.image_base64) {
+            const rawB64 = respData.image_base64;
+            outputB64 = rawB64.startsWith('data:') ? rawB64 : `data:${respData.content_type || 'image/png'};base64,${rawB64}`;
+            outContentType = respData.content_type || 'image/png';
+            width = respData.width || 1000;
+            height = respData.height || 1000;
+            fileSize = respData.file_size || inputBytes.length;
+            engine = 'AWS-EC2-Neural-Enhancement';
+            awsSuccess = true;
+          } else if (respData.enhanced_image) {
+            const rawB64 = respData.enhanced_image;
+            outputB64 = rawB64.startsWith('data:') ? rawB64 : `data:image/png;base64,${rawB64}`;
+            outContentType = 'image/png';
             engine = 'AWS-EC2-Neural-Enhancement';
             awsSuccess = true;
           }
         }
-        // Shape 2: { image_base64: '...', content_type: '...' }
-        else if (respData.image_base64) {
-          const rawB64 = respData.image_base64;
-          outputB64 = rawB64.startsWith('data:')
-            ? rawB64
-            : `data:${respData.content_type || 'image/png'};base64,${rawB64}`;
-          outContentType = respData.content_type || 'image/png';
-          width = respData.width || 1000;
-          height = respData.height || 1000;
-          fileSize = respData.file_size || inputBytes.length;
-          engine = 'AWS-EC2-Neural-Enhancement';
-          awsSuccess = true;
-        }
-        // Shape 3: { enhanced_image: '...base64...' }
-        else if (respData.enhanced_image) {
-          const rawB64 = respData.enhanced_image;
-          outputB64 = rawB64.startsWith('data:')
-            ? rawB64
-            : `data:image/png;base64,${rawB64}`;
-          outContentType = 'image/png';
-          engine = 'AWS-EC2-Neural-Enhancement';
-          awsSuccess = true;
-        }
       }
 
       if (awsSuccess) {
-        console.log(`✅ AWS image enhancement succeeded via ${awsUrl}/enhance`);
+        console.log(`✅ AWS image enhancement succeeded via ${awsUrl}`);
       }
     } catch (awsErr: any) {
-      console.warn(`⚠️  AWS image enhancement at ${awsUrl} failed (${awsErr?.message || awsErr}). Falling back to built-in ML CV pipeline.`);
+      console.warn(`⚠️  AWS image enhancement at ${awsUrl} unavailable (${awsErr?.message || 'timeout'}). Seamlessly falling back to local ML CV pipeline.`);
     }
 
     // ── FALLBACK: Built-in Sharp + U²-Net + CLAHE pipeline ───────────────────
