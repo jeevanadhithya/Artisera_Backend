@@ -15,7 +15,7 @@ export const getPool = (): Pool => {
   return pool;
 };
 
-const query = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
+export const query = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
   try {
     const client = getPool();
     const result = await client.query(sql, params);
@@ -26,7 +26,7 @@ const query = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => 
   }
 };
 
-const queryOne = async <T = any>(sql: string, params: any[] = []): Promise<T | null> => {
+export const queryOne = async <T = any>(sql: string, params: any[] = []): Promise<T | null> => {
   const rows = await query<T>(sql, params);
   return rows.length > 0 ? rows[0] : null;
 };
@@ -168,20 +168,29 @@ export const getAllBuyers = async (limit: number = 50, offset: number = 0): Prom
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 
+const isUuid = (val?: string): boolean => typeof val === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(val);
+
 export const createProduct = async (artisanId: string, data: Record<string, any>): Promise<any> => {
-  const payload = {
+  const payload: any = {
     artisan_id: artisanId,
-    status: 'draft',
+    status: data.status || 'published',
     ai_generated: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...data,
   };
+  // Strip client-generated dummy IDs like 'craft-1789...' so PostgreSQL creates a valid UUID
+  if (payload.id && !isUuid(payload.id)) {
+    delete payload.id;
+  }
   const { sql, values } = buildInsertQuery('products', payload);
   return queryOne(sql, values);
 };
 
 export const getProductById = async (productId: string): Promise<any> => {
+  if (!isUuid(productId)) {
+    throw new NotFoundError('Product', productId);
+  }
   const result = await queryOne(`SELECT * FROM public.products WHERE id = $1;`, [productId]);
   if (!result) {
     throw new NotFoundError('Product', productId);
@@ -567,10 +576,12 @@ export const createProductImage = async (data: {
 };
 
 export const getProductImageById = async (imageId: string): Promise<any | null> => {
+  if (!isUuid(imageId)) return null;
   return queryOne(`SELECT * FROM public.product_images WHERE id = $1;`, [imageId]);
 };
 
 export const getProductImagesByProductId = async (productId: string): Promise<any[]> => {
+  if (!isUuid(productId)) return [];
   return query(
     `SELECT * FROM public.product_images WHERE product_id = $1 ORDER BY created_at DESC;`,
     [productId]

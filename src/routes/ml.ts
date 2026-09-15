@@ -7,7 +7,7 @@ const success = (data: any) => ({ success: true, data });
 const processor = new FreeImageProcessingProvider();
 
 // Dynamic AWS URL configuration (can be updated at runtime without restart)
-let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://16.16.99.220:8000';
+let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://13.63.49.183:8000';
 
 /**
  * GET /api/ml/config
@@ -129,15 +129,18 @@ router.post('/enhance', async (req: Request, res: Response, next: NextFunction) 
     let outContentType = 'image/png';
 
     // ── PRIMARY: AWS EC2 Neural Image Enhancement Server ─────────────────────
+    const preferEngine = req.body?.prefer_engine; // 'local' | 'aws'
     const awsUrl = req.body?.aws_url || dynamicAwsUrl;
-    const awsTimeoutMs = parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '2500', 10);
+    const awsTimeoutMs = parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '45000', 10);
     let awsSuccess = false;
 
     const detected = detectImageExtension(inputBytes, contentType);
     const filename = `craft.${detected.ext}`;
 
-    try {
-      const axios = (await import('axios')).default;
+    if (preferEngine !== 'local') {
+      try {
+        const axios = (await import('axios')).default;
+        console.log(`[ML API] Forwarding image enhancement to AWS: ${awsUrl} (timeout: ${awsTimeoutMs}ms)...`);
 
       // Fast try 1: Base64 JSON endpoint (low latency)
       try {
@@ -217,6 +220,7 @@ router.post('/enhance', async (req: Request, res: Response, next: NextFunction) 
     } catch (awsErr: any) {
       console.warn(`⚠️  AWS image enhancement at ${awsUrl} unavailable (${awsErr?.message || 'timeout'}). Seamlessly falling back to local ML CV pipeline.`);
     }
+  }
 
     // ── FALLBACK: Built-in Sharp + U²-Net + CLAHE pipeline ───────────────────
     if (!awsSuccess) {
