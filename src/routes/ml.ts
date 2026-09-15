@@ -7,7 +7,7 @@ const success = (data: any) => ({ success: true, data });
 const processor = new FreeImageProcessingProvider();
 
 // Dynamic AWS URL configuration (can be updated at runtime without restart)
-let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://13.63.49.183:8000';
+let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://13.63.125.7:8000';
 
 /**
  * GET /api/ml/config
