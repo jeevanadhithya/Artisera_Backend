@@ -1528,79 +1528,194 @@ ${product ? `Title: ${product.name || product.title}, Price: ₹${product.price}
     readinessCard?: MarketplaceReadinessResult,
     profitCard?: ProfitCalculationResult,
     taskGuide?: TaskGuideInfo,
-    lang: SupportedLanguage = 'en'
+    lang: SupportedLanguage = 'en',
+    contextString?: string
   ): string {
+    const q = (query || '').toLowerCase();
+
     // 1. Task Guide Response
     if (taskGuide) {
       const stepText = taskGuide.instructions.map((ins, i) => `${i + 1}. ${ins}`).join('\n');
-      if (lang === 'hi') {
-        return `नमस्ते! ${taskGuide.step_title}\n\n${stepText}\n\nनीचे दिए गए बटन पर टैप करके तुरंत आगे बढ़ें।`;
-      }
-      if (lang === 'ta') {
-        return `வணக்கம்! ${taskGuide.step_title}\n\n${stepText}\n\nகீழே உள்ள பொத்தானைத் தட்டி உடனே தொடங்கவும்.`;
-      }
-      if (lang === 'te') {
-        return `నమస్కారం! ${taskGuide.step_title}\n\n${stepText}\n\nవెంటనే ముందుకు సాగడానికి క్రింది బటన్‌పై నొక్కండి.`;
-      }
-      if (lang === 'bn') {
-        return `নমস্কার! ${taskGuide.step_title}\n\n${stepText}\n\nপরবর্তী পদক্ষেপ নিতে নিচের বাটনে ক্লিক করুন।`;
-      }
-      if (lang === 'mr') {
-        return `नमस्ते! ${taskGuide.step_title}\n\n${stepText}\n\nपुढील कृतीसाठी खालील बटनावर टॅप करा.`;
-      }
-      if (lang === 'kn') {
-        return `ನಮಸ್ಕಾರ! ${taskGuide.step_title}\n\n${stepText}\n\nಮುಂದಿನ ಹಂತಕ್ಕೆ ಮುಂದುವರಿಯಲು ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತಿರಿ.`;
-      }
+      if (lang === 'hi') return `नमस्ते! ${taskGuide.step_title}\n\n${stepText}\n\nनीचे दिए गए बटन पर टैप करके तुरंत आगे बढ़ें।`;
+      if (lang === 'ta') return `வணக்கம்! ${taskGuide.step_title}\n\n${stepText}\n\nகீழே உள்ள பொத்தானைத் தட்டி உடனே தொடங்கவும்.`;
+      if (lang === 'te') return `నమస్కారం! ${taskGuide.step_title}\n\n${stepText}\n\nవెంటనే ముందుకు సాగడానికి క్రింది బటన్‌పై నొక్కండి.`;
+      if (lang === 'bn') return `নমস্কার! ${taskGuide.step_title}\n\n${stepText}\n\nপরবর্তী পদক্ষেপ নিতে নিচের বাটনে ক্লিক করুন।`;
+      if (lang === 'mr') return `नमस्ते! ${taskGuide.step_title}\n\n${stepText}\n\nपुढील कृतीसाठी खालील बटनावर टॅप करा.`;
+      if (lang === 'kn') return `ನಮಸ್ಕಾರ! ${taskGuide.step_title}\n\n${stepText}\n\nಮುಂದಿನ ಹಂತಕ್ಕೆ ಮುಂದುವರಿಯಲು ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತಿರಿ.`;
       return `Namaste! ${taskGuide.step_title}\n\n${stepText}\n\nTap the action button below to proceed.`;
     }
 
     // 2. Marketplace Readiness
     if (readinessCard) {
       if (readinessCard.status === 'READY') {
-        if (lang === 'hi') {
-          return `बधाई! आपका उत्पाद "${product?.name || 'क्राफ्ट'}" ${readinessCard.displayName} के लिए 100% तैयार है। आप नीचे से एक्सपोर्ट पैकेज तैयार कर सकते हैं।`;
-        }
-        return `Great news! Your product "${product?.name || 'Craft'}" is 100% prepared for ${readinessCard.displayName}. All mandatory fields are verified. You can now generate your compliant export package below.`;
+        const prodName = product?.name || 'Craft';
+        if (lang === 'hi') return `बधाई! आपका उत्पाद "${prodName}" ${readinessCard.displayName} के लिए 100% तैयार है। आप नीचे से एक्सपोर्ट पैकेज तैयार कर सकते हैं।`;
+        if (lang === 'ta') return `வாழ்த்துக்கள்! உங்கள் தயாரிப்பு "${prodName}" ${readinessCard.displayName} க்கு 100% தயாராக உள்ளது. நீங்கள் இப்போது ஏற்றுமதி தொகுப்பை உருவாக்கலாம்.`;
+        if (lang === 'te') return `అభినందనలు! మీ ఉత్పత్తి "${prodName}" ${readinessCard.displayName} కోసం 100% సిద్ధంగా ఉంది. మీరు ఎగుమతి ప్యాకేజీని ఇప్పుడే సిద్ధం చేయవచ్చు.`;
+        if (lang === 'bn') return `অভিনন্দন! আপনার পণ্য "${prodName}" ${readinessCard.displayName} এর জন্য ১০০% প্রস্তুত। আপনি এখন এক্সপোর্ট প্যাকেজ তৈরি করতে পারেন।`;
+        if (lang === 'mr') return `अभिनंदन! तुमचे उत्पादन "${prodName}" ${readinessCard.displayName} साठी १००% तयार आहे. तुम्ही आता एक्सपोर्ट पॅकेज बनवू शकता.`;
+        if (lang === 'kn') return `ಅಭಿನಂದನೆಗಳು! ನಿಮ್ಮ ಉತ್ಪನ್ನ "${prodName}" ${readinessCard.displayName} ಗಾಗಿ 100% ಸಿದ್ಧವಾಗಿದೆ. ನೀವು ಈಗ ರಫ್ತು ಪ್ಯಾಕೇಜ್ ಅನ್ನು ರಚಿಸಬಹುದು.`;
+        return `Great news! Your product "${prodName}" is 100% prepared for ${readinessCard.displayName}. All mandatory fields are verified. You can now generate your compliant export package below.`;
       } else {
         const missing = readinessCard.missingFields.map((f) => `• ${f.friendlyMessage}`).join('\n');
-        if (lang === 'hi') {
-          return `हमने ${readinessCard.displayName} के लिए आपके उत्पाद का मूल्यांकन किया (${readinessCard.readinessPercentage}% तैयार)।\n\nकृपया ये विवरण पूरा करें:\n${missing}`;
-        }
+        if (lang === 'hi') return `हमने ${readinessCard.displayName} के लिए आपके उत्पाद का मूल्यांकन किया (${readinessCard.readinessPercentage}% तैयार)।\n\nकृपया ये विवरण पूरा करें:\n${missing}`;
+        if (lang === 'ta') return `உங்கள் தயாரிப்பை ${readinessCard.displayName} க்காக மதிப்பிட்டோம் (${readinessCard.readinessPercentage}% தயார்).\n\nஇந்த விவரங்களை நிரப்பவும்:\n${missing}`;
+        if (lang === 'te') return `మేము మీ ఉత్పత్తిని ${readinessCard.displayName} కోసం అంచనా వేశాము (${readinessCard.readinessPercentage}% సిద్ధంగా ఉంది).\n\nదయచేసి ఈ వివరాలను పూర్తి చేయండి:\n${missing}`;
+        if (lang === 'bn') return `আমরা ${readinessCard.displayName} এর জন্য আপনার পণ্য মূল্যায়ন করেছি (${readinessCard.readinessPercentage}% প্রস্তুত)।\n\nদয়া করে এই বিবরণগুলি সম্পূর্ণ করুন:\n${missing}`;
+        if (lang === 'mr') return `आम्ही ${readinessCard.displayName} साठी तुमच्या उत्पादनाचे मूल्यमापन केले (${readinessCard.readinessPercentage}% तयार).\n\nकृपया हे तपशील पूर्ण करा:\n${missing}`;
+        if (lang === 'kn') return `ನಾವು ${readinessCard.displayName} ಗಾಗಿ ನಿಮ್ಮ ಉತ್ಪನ್ನವನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಿದ್ದೇವೆ (${readinessCard.readinessPercentage}% ಸಿದ್ಧವಾಗಿದೆ).\n\nದಯವಿಟ್ಟು ಈ ವಿವರಗಳನ್ನು ಪೂರ್ಣಗೊಳಿಸಿ:\n${missing}`;
         return `We evaluated your product for ${readinessCard.displayName} (Readiness: ${readinessCard.readinessPercentage}%).\n\nPlease complete the following details:\n${missing}\n\nTap the action button to update these fields.`;
       }
     }
 
     // 3. Profit Calculation
     if (profitCard) {
-      if (lang === 'hi') {
-        return `नमस्ते! ₹${profitCard.sellingPrice} के विक्रय मूल्य पर आपकी उत्पादन लागत ₹${profitCard.floorCost} है। आपको ₹${profitCard.netProfit} का शुद्ध लाभ (${profitCard.profitMarginPct}% मार्जिन) मिलता है। इसमें ₹${profitCard.breakdown.laborCompensation} का उचित श्रम पारिश्रमिक शामिल है।`;
-      }
-      if (lang === 'ta') {
-        return `வணக்கம்! ₹${profitCard.sellingPrice} விற்பனை விலையில் உங்கள் உற்பத்தி செலவு ₹${profitCard.floorCost} ஆகும். உங்களுக்கு ₹${profitCard.netProfit} நிகர லாபம் (${profitCard.profitMarginPct}%) கிடைக்கும். இதில் உழைப்புக்கான நியாயமான கூலியும் அடங்கும்.`;
-      }
+      if (lang === 'hi') return `नमस्ते! ₹${profitCard.sellingPrice} के विक्रय मूल्य पर आपकी उत्पादन लागत ₹${profitCard.floorCost} है। आपको ₹${profitCard.netProfit} का शुद्ध लाभ (${profitCard.profitMarginPct}% मार्जिन) मिलता है। इसमें ₹${profitCard.breakdown.laborCompensation} का उचित श्रम पारिश्रमिक शामिल है।`;
+      if (lang === 'ta') return `வணக்கம்! ₹${profitCard.sellingPrice} விற்பனை விலையில் உங்கள் உற்பத்தி செலவு ₹${profitCard.floorCost} ஆகும். உங்களுக்கு ₹${profitCard.netProfit} நிகர லாபம் (${profitCard.profitMarginPct}%) கிடைக்கும். இதில் உழைப்புக்கான நியாயமான கூலியும் அடங்கும்.`;
+      if (lang === 'te') return `నమస్కారం! ₹${profitCard.sellingPrice} అమ్మకపు ధర వద్ద మీ ఉత్పత్తి వ్యయం ₹${profitCard.floorCost}. మీకు ₹${profitCard.netProfit} నికర లాభం (${profitCard.profitMarginPct}%) లభిస్తుంది. ఇందులో మీ శ్రమకు సరైన వేతనం కూడా కలిసి ఉంది.`;
+      if (lang === 'bn') return `নমস্কার! ₹${profitCard.sellingPrice} বিক্রয়মূল্যে আপনার উৎপাদন খরচ ₹${profitCard.floorCost}। আপনি ₹${profitCard.netProfit} নিট মুনাফা (${profitCard.profitMarginPct}%) পাবেন। এর মধ্যে শ্রমের সঠিক পারিশ্রমিকও অন্তর্ভুক্ত।`;
+      if (lang === 'mr') return `नमस्ते! ₹${profitCard.sellingPrice} विक्री किमतीवर तुमचा उत्पादन खर्च ₹${profitCard.floorCost} आहे. तुम्हाला ₹${profitCard.netProfit} निव्वळ नफा (${profitCard.profitMarginPct}%) मिळतो. यात मजुरीचा योग्य मोबदला समाविष्ट आहे.`;
+      if (lang === 'kn') return `ನಮಸ್ಕಾರ! ₹${profitCard.sellingPrice} ಮಾರಾಟ ಬೆಲೆಯಲ್ಲಿ ನಿಮ್ಮ ಉತ್ಪಾದನಾ ವೆಚ್ಚ ₹${profitCard.floorCost} ಆಗಿದೆ. ನಿಮಗೆ ₹${profitCard.netProfit} ನಿವ್ವಳ ಲಾಭ (${profitCard.profitMarginPct}%) ಸಿಗುತ್ತದೆ. ಇದು ಶ್ರಮದ ನ್ಯಾಯಯುತ ಕೂಲಿಯನ್ನು ಒಳಗೊಂಡಿದೆ.`;
       return `Namaste! Based on your craft costs, selling at ₹${profitCard.sellingPrice} gives you a net profit of ₹${profitCard.netProfit} (${profitCard.profitMarginPct}% margin).\n\nYour Production Floor Cost is ₹${profitCard.floorCost}, which includes ₹${profitCard.breakdown.materialCost} for raw materials and ₹${profitCard.breakdown.laborCompensation} for ${profitCard.breakdown.hoursWorked} hours of skilled labor at ₹${profitCard.breakdown.hourlyWageEarned}/hr.`;
     }
 
-    // 4. Default Friendly Greeting
-    if (lang === 'hi') {
-      return `नमस्ते! मैं आपका आर्टिसेरा कारीगर मार्गदर्शक हूँ।\n\nमैं आपकी सहायता कर सकता हूँ:\n1. पीएम विश्वकर्मा और मुद्रा योजना में पंजीकरण।\n2. नया उत्पाद जोड़ने के 6 सरल चरण।\n3. अमेज़न, फ्लिपकार्ट, जेम और ओएनडीसी के लिए तैयारी।\n4. कारीगरों के लिए उचित मूल्य और लाभ गणना।\n\nआप आज क्या शुरू करना चाहते हैं?`;
-    }
-    if (lang === 'ta') {
-      return `வணக்கம்! நான் உங்கள் ஆர்ட்டிசெரா கைவினை வழிகாட்டி.\n\nநான் உங்களுக்கு உதவ முடியும்:\n1. பிஎம் விஸ்வகர்மா மற்றும் முத்ரா கடன் திட்டங்கள்.\n2. புதிய பொருளைச் சேர்க்க 6 எளிய படிகள்.\n3. அமேசான், பிளிப்கார்ட், GeM, ONDC விற்பனை தயாரிப்பு.\n4. நியாயமான விலை மற்றும் லாப கணக்கீடு.\n\nஇன்று நாம் எதிலிருந்து தொடங்கலாம்?`;
-    }
-    if (lang === 'te') {
-      return `నమస్కారం! నేను మీ ఆర్టిసెరా కళాకారుల మార్గదర్శిని.\n\nనేను మీకు సహాయం చేయగలను:\n1. పిఎం విశ్వకర్మ మరియు ముద్రా పథకాలు.\n2. కొత్త వస్తువును రూపొందించడానికి 6 సులభ దశలు.\n3. అమెజాన్, ఫ్లిప్‌కార్ట్, GeM, ONDC విక్రయ సంసిద్ధత.\n4. సరసమైన ధర మరియు లాభం లెక్కింపు.\n\nఈరోజు మీరు దేనితో ప్రారంభించాలనుకుంటున్నారు?`;
-    }
-    if (lang === 'bn') {
-      return `নমস্কার! আমি আপনার আর্টিসেরা কারিগর গাইড।\n\nআমি আপনাকে সাহায্য করতে পারি:\n১. পিএম বিশ্বকর্মা এবং মুদ্রা ঋণ স্কিম।\n২. নতুন পণ্য যোগ করার ৬টি সহজ ধাপ।\n৩. অ্যামাজন, ফ্লিপকার্ট, GeM, ONDC বিক্রির প্রস্তুতি।\n৪. ন্যায্য মূল্য এবং মুনাফা গণনা।\n\nআজ আপনি কী দিয়ে শুরু করতে চান?`;
-    }
-    if (lang === 'mr') {
-      return `नमस्ते! मी तुमचा आर्टिसेरा कारागीर मार्गदर्शक आहे.\n\nमी तुम्हाला मदत करू शकतो:\n१. पीएम विश्वकर्मा आणि मुद्रा योजना नोंदणी.\n२. नवीन उत्पादन तयार करण्याचे ६ सोपे टप्पे.\n३. अॅमेझॉन, फ्लिपकार्ट, GeM, ONDC विक्री तयारी.\n४. योग्य किंमत आणि नफा गणित.\n\nआज आपण कशाने सुरुवात करूया?`;
-    }
-    if (lang === 'kn') {
-      return `ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಆರ್ಟಿಸೆರಾ ಕುಶಲಕರ್ಮಿ ಮಾರ್ಗದರ್ಶಿ.\n\nನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ:\n1. ಪಿಎಂ ವಿಶ್ವಕರ್ಮ ಮತ್ತು ಮುದ್ರಾ ಯೋಜನೆಗಳು.\n2. ಹೊಸ ಉತ್ಪನ್ನ ರಚಿಸಲು 6 ಸರಳ ಹಂತಗಳು.\n3. ಅಮೆಜಾನ್, ಫ್ಲಿಪ್‌ಕಾರ್ಟ್, GeM, ONDC ಮಾರಾಟ ಸಿದ್ಧತೆ.\n4. ನ್ಯಾಯಯುತ ಬೆಲೆ ಮತ್ತು ಲಾಭದ ಲೆಕ್ಕಾಚಾರ.\n\nಇಂದು ನೀವು ಏನನ್ನು ಪ್ರಾರಂಭಿಸಲು ಬಯಸುತ್ತೀರಿ?`;
+    // 4. Amazon Karigar / GTIN / Barcode
+    if (q.includes('amazon') || q.includes('karigar') || q.includes('gtin') || q.includes('barcode') || q.includes('अमेज़न') || q.includes('அமேசான்') || q.includes('అమెజాన్')) {
+      if (lang === 'hi') return `अमेज़न कारीगर (Amazon Karigar) पर पंजीकरण के चरण:\n1. 50% रेफ़रल शुल्क छूट के लिए पहचान कार्ड आवश्यक है।\n2. हस्तनिर्मित उत्पादों को बारकोड की आवश्यकता नहीं है, GTIN छूट के लिए आवेदन करें।\n3. आर्टिसेरा से सफेद बैकग्राउंड वाले फोटो और एक्सपोर्ट फाइल प्राप्त करें।`;
+      if (lang === 'ta') return `அமேசான் காரிகர் திட்டத்தில் பதிவு செய்ய:\n1. 50% கட்டண சலுகைக்கு பெஹ்சான் அட்டை தேவை.\n2. கைவினைப் பொருட்களுக்கு பார்வோட் தேவையில்லை, GTIN விலக்கு பெறலாம்.\n3. ஆர்ட்டிசெராவில் இருந்து வெள்ளை பின்னணி புகைப்படங்கள் மற்றும் ஏற்றுமதி கோப்பைப் பெறலாம்.`;
+      if (lang === 'te') return `అమెజాన్ కారిగర్‌లో నమోదు చేయడానికి:\n1. 50% రుసుము తగ్గింపు కోసం పెహచాన్ కార్డు అవసరం.\n2. హస్తకళలకు బార్‌కోడ్ అవసరం లేదు, GTIN మినహాయింపు పొందవచ్చు.\n3. ఆర్టిసెరా నుండి తెల్లటి నేపథ్య ఫోటోలు మరియు ఎగుమతి ఫైల్‌ను పొందండి.`;
+      if (lang === 'bn') return `অ্যামাজন কারিগর-এ নিবন্ধনের ধাপ:\n১. ৫০% ফি ছাড়ের জন্য পেহচান কার্ড প্রয়োজন।\n২. হস্তশিল্পের জন্য বারকোড প্রয়োজন নেই, GTIN ছাড়ের আবেদন করুন।\n৩. আর্টিসেরা থেকে সাদা ব্যাকগ্রাউন্ডের ছবি এবং এক্সপোর্ট ফাইল পান।`;
+      if (lang === 'mr') return `अॅमेझॉन कारागीर नोंदणीसाठी:\n१. ५०% फी सवलतीसाठी पेहचान कार्ड आवश्यक आहे.\n२. हस्तकलेला बारकोडची गरज नाही, GTIN सवलतीसाठी अर्ज करा.\n३. आर्टिसेराकडून पांढऱ्या पार्श्वभूमीचे फोटो आणि एक्सपोर्ट फाईल मिळवा.`;
+      if (lang === 'kn') return `ಅಮೆಜಾನ್ ಕಾರಿಗರ್‌ನಲ್ಲಿ ನೋಂದಾಯಿಸಲು:\n1. 50% ಶುಲ್ಕ ರಿಯಾಯಿತಿಗೆ ಪೆಹಚಾನ್ ಕಾರ್ಡ್ ಅಗತ್ಯವಿದೆ.\n2. ಕರಕುಶಲ ವಸ್ತುಗಳಿಗೆ ಬಾರ್‌ಕೋಡ್ ಅಗತ್ಯವಿಲ್ಲ, GTIN ವಿನಾಯಿತಿ ಪಡೆಯಿರಿ.\n3. ಆರ್ಟಿಸೆರಾದಿಂದ ಬಿಳಿ ಹಿನ್ನೆಲೆ ಫೋಟೋಗಳು ಮತ್ತು ರಫ್ತು ಫೈಲ್ ಪಡೆಯಿರಿ.`;
+      return `To register on Amazon Karigar:\n1. Eligibility: Pehchan Artisan ID Card required for 50% referral fee waivers.\n2. GTIN Exemption: Handmade crafts don't need barcodes. Apply for free exemption.\n3. Export: Download Amazon-ready CSV and white-background images directly from Artisera!`;
     }
 
+    // 5. Craft Quality & Photos
+    if (q.includes('photo') || q.includes('quality') || q.includes('improve') || q.includes('craft') || q.includes('फोटो') || q.includes('புகைப்படம்') || q.includes('గుణమట్టం') || q.includes('छवि')) {
+      if (lang === 'hi') return `फोटो सुधारने के टिप्स:\n1. सुबह की प्राकृतिक रोशनी में फोटो लें।\n2. साफ सादा (सफेद/हल्का) बैकग्राउंड उपयोग करें।\n3. सामने, साइड, ऊपर और क्लोज़-अप एंगल से फोटो लें।\n4. बैकग्राउंड हटाने के लिए आर्टिसेरा एआई स्टूडियो का उपयोग करें।`;
+      if (lang === 'ta') return `புகைப்படங்களை மேம்படுத்த:\n1. காலை இயற்கை வெளிச்சத்தில் படமெடுக்கவும்.\n2. சுத்தமான வெள்ளை அல்லது வெளிர் பின்னணியைப் பயன்படுத்தவும்.\n3. முன், பக்கவாட்டு, மேல் மற்றும் நெருக்கமான கோணங்களில் படமெடுக்கவும்.\n4. ஆர்ட்டிசெரா AI ஸ்டுடியோவைப் பயன்படுத்தவும்.`;
+      if (lang === 'te') return `ఫోటోలను మెరుగుపరచడానికి:\n1. ఉదయం సహజ కాంతిలో ఫోటోలు తీయండి.\n2. శుభ్రమైన తెలుపు లేదా లేత నేపథ్యాన్ని ఉపయోగించండి.\n3. ముందు, పక్క, పై నుండి మరియు దగ్గరి కోణాల్లో ఫోటోలు తీయండి.\n4. ఆర్టిసెరా AI స్టూడియోని ఉపయోగించండి.`;
+      if (lang === 'bn') return `ছবি উন্নত করার টিপস:\n১. সকালের প্রাকৃতিক আলোতে ছবি তুলুন।\n২. পরিষ্কার সাদা বা হালকা ব্যাকগ্রাউন্ড ব্যবহার করুন।\n৩. সামনে, পাশ, উপর এবং কাছ থেকে ছবি তুলুন।\n৪. আর্টিসেরা এআই স্টুডিও ব্যবহার করুন।`;
+      if (lang === 'mr') return `फोटो सुधारण्याच्या टिप्स:\n१. सकाळच्या नैसर्गिक प्रकाशात फोटो काढा.\n२. स्वच्छ पांढरी किंवा हलकी पार्श्वभूमी वापरा.\n३. समोरून, बाजूने, वरून आणि जवळून फोटो काढा.\n४. आर्टिसेरा एआय स्टुडिओ वापरा.`;
+      if (lang === 'kn') return `ಫೋಟೋಗಳನ್ನು ಸುಧಾರಿಸಲು:\n1. ಬೆಳಗಿನ ನೈಸರ್ಗಿಕ ಬೆಳಕಿನಲ್ಲಿ ಫೋಟೋಗಳನ್ನು ತೆಗೆದುಕೊಳ್ಳಿ.\n2. ಶುದ್ಧ ಬಿಳಿ ಅಥವಾ ತಿಳಿ ಹಿನ್ನೆಲೆ ಬಳಸಿ.\n3. ಮುಂಭಾಗ, ಬದಿ, ಮೇಲಿನಿಂದ ಮತ್ತು ಹತ್ತಿರದ ಕೋನಗಳಲ್ಲಿ ಫೋಟೋ ತೆಗೆದುಕೊಳ್ಳಿ.\n4. ಆರ್ಟಿಸೆರಾ ಎಐ ಸ್ಟುಡಿಯೋ ಬಳಸಿ.`;
+      return `To improve product photography:\n1. Soft Daylight: Photograph near an open window between 8-10 AM.\n2. Clean Background: Use an off-white or light matte sheet.\n3. Angles: Capture front, 45-degree side, top-down, and a close-up macro.\n4. AI Studio: Use Artisera AI Studio to automatically enhance images!`;
+    }
+
+    // 6. Terracotta / Clay Cracks & Fragile Packaging
+    if (q.includes('terracotta') || q.includes('crack') || q.includes('clay') || q.includes('pottery') || q.includes('fragile') || q.includes('pack') || q.includes('मिट्टी') || q.includes('दरार') || q.includes('பாண்டம்') || q.includes('క్రాక్స్')) {
+      if (lang === 'hi') return `टेराकोटा में दरार रोकने और सुरक्षित पैकेजिंग के उपाय:\n1. बर्तनों को 48-72 घंटे छाया में सुखाएं।\n2. हवा निकालने के लिए मिट्टी को अच्छी तरह गूंधें।\n3. भट्टी का तापमान धीरे-धीरे बढ़ाएं।\n4. 2-इंच गैप के साथ 5-प्लाई डिब्बे में डबल बबल रैप पैक करें।`;
+      if (lang === 'ta') return `டெரகோட்டா விரிசல்களைத் தடுக்க மற்றும் பாதுகாப்பான பேக்கிங்:\n1. 48-72 மணி நேரம் நிழலில் உலர்த்தவும்.\n2. காற்றை வெளியேற்ற களிமண்ணை நன்றாகப் பிசையவும்.\n3. சூளையின் வெப்பநிலையை மெதுவாக அதிகரிக்கவும்.\n4. 2-அங்குல இடைவெளியுடன் 5-பிளை பெட்டியில் பேக் செய்யவும்.`;
+      if (lang === 'te') return `టెర్రకోట పగుళ్లను నివారించడానికి మరియు సురక్షితమైన ప్యాకింగ్:\n1. 48-72 గంటల పాటు నీడలో ఆరబెట్టండి.\n2. గాలి బుడగలు పోవడానికి మట్టిని బాగా పిసకండి.\n3. బట్టీ ఉష్ణోగ్రతను క్రమంగా పెంచండి.\n4. 2-అంగుళాల ఖాళీతో 5-ప్లై బాక్స్‌లో ప్యాక్ చేయండి.`;
+      if (lang === 'bn') return `টেরাকোটা ফাটল রোধ এবং নিরাপদ প্যাকেজিং:\n১. ৪৮-৭২ ঘণ্টা ছায়ায় শুকান।\n২. বাতাস বের করার জন্য মাটি ভালোভাবে মাখুন।\n৩. চুল্লির তাপমাত্রা ধীরে ধীরে বাড়ান।\n৪. ২-ইঞ্চি ফাঁক রেখে ৫-প্লাই বক্সে প্যাক করুন।`;
+      if (lang === 'mr') return `टेराकोटा तडे रोखण्यासाठी आणि सुरक्षित पॅकेजिंग:\n१. ४८-७२ तास सावलीत वाळवा.\n२. हवा काढण्यासाठी माती चांगली मळून घ्या.\n३. भट्टीचे तापमान हळूहळू वाढवा.\n४. २-इंच अंतर ठेवून ५-प्लाय बॉक्समध्ये पॅक करा.`;
+      if (lang === 'kn') return `ಟೆರಾಕೋಟಾ ಬಿರುಕುಗಳನ್ನು ತಡೆಯಲು ಮತ್ತು ಸುರಕ್ಷಿತ ಪ್ಯಾಕಿಂಗ್:\n1. 48-72 ಗಂಟೆಗಳ ಕಾಲ ನೆರಳಿನಲ್ಲಿ ಒಣಗಿಸಿ.\n2. ಗಾಳಿ ಗುಳ್ಳೆಗಳನ್ನು ತೆಗೆಯಲು ಮಣ್ಣನ್ನು ಚೆನ್ನಾಗಿ ನಾದಿಕೊಳ್ಳಿ.\n3. ಗೂಡಿನ ತಾಪಮಾನವನ್ನು ನಿಧಾನವಾಗಿ ಹೆಚ್ಚಿಸಿ.\n4. 2-ಇಂಚಿನ ಅಂತರದೊಂದಿಗೆ 5-ಪ್ಲೈ ಬಾಕ್ಸ್‌ನಲ್ಲಿ ಪ್ಯಾಕ್ ಮಾಡಿ.`;
+      return `To prevent cracks in terracotta and package fragile crafts:\n1. Uniform Drying: Dry slowly in the shade for 48-72 hours.\n2. Wedging: Knead clay thoroughly to remove air pockets.\n3. Firing: Increase kiln temperature gradually below 200°C initially.\n4. Packaging: Use double bubble wrap in a 5-ply box with 2 inches of void fill.`;
+    }
+
+    // 7. Mudra Loan Scheme
+    if (q.includes('mudra') || q.includes('मुद्रा') || q.includes('முத்ரா') || q.includes('ముద్ర') || q.includes('মুদ্রা')) {
+      if (lang === 'hi') return `मुद्रा योजना (PMMY) कारीगरों के लिए 3 ऋण देती है:\n1. शिशु: ₹50,000 तक (कोई गारंटी नहीं)\n2. किशोर: ₹5,00,000 तक\n3. तरुण: ₹10,00,000 तक\nकिसी भी बैंक या udyamimitra.in पर आवेदन करें।`;
+      if (lang === 'ta') return `முத்ரா திட்டம் (PMMY) 3 கடன்களை வழங்குகிறது:\n1. சிசு: ₹50,000 வரை\n2. கிஷோர்: ₹5,00,000 வரை\n3. தருண்: ₹10,00,000 வரை\nஎந்த வங்கியிலும் அல்லது udyamimitra.in இல் விண்ணப்பிக்கலாம்.`;
+      if (lang === 'te') return `ముద్రా పథకం (PMMY) 3 రుణాలు అందిస్తుంది:\n1. శిశు: ₹50,000 వరకు\n2. కిషోర్: ₹5,00,000 వరకు\n3. తరుణ్: ₹10,00,000 వరకు\nబ్యాంకులో లేదా udyamimitra.in లో దరఖాస్తు చేసుకోండి.`;
+      if (lang === 'bn') return `মুদ্রা যোজনা (PMMY) ৩টি ঋণ প্রদান করে:\n১. শিশু: ₹৫০,০০০ পর্যন্ত\n২. কিশোর: ₹৫,০০,০০০ পর্যন্ত\n৩. তরুণ: ₹১০,০০,০০০ পর্যন্ত\nযে কোনো ব্যাংকে বা udyamimitra.in এ আবেদন করুন।`;
+      if (lang === 'mr') return `मुद्रा योजना (PMMY) ३ कर्ज देते:\n१. शिशु: ₹५०,००० पर्यंत\n२. किशोर: ₹५,००,००० पर्यंत\n३. तरुण: ₹१०,००,००० पर्यंत\nकोणत्याही बँकेत किंवा udyamimitra.in वर अर्ज करा.`;
+      if (lang === 'kn') return `ಮುದ್ರಾ ಯೋಜನೆ (PMMY) 3 ಸಾಲಗಳನ್ನು ಒದಗಿಸುತ್ತದೆ:\n1. ಶಿಶು: ₹50,000 ವರೆಗೆ\n2. ಕಿಶೋರ್: ₹5,00,000 ವರೆಗೆ\n3. ತರುಣ್: ₹10,00,000 ವರೆಗೆ\nಬ್ಯಾಂಕ್‌ನಲ್ಲಿ ಅಥವಾ udyamimitra.in ನಲ್ಲಿ ಅರ್ಜಿ ಸಲ್ಲಿಸಿ.`;
+      return `Pradhan Mantri Mudra Yojana (PMMY) provides collateral-free working capital:\n1. Shishu: Up to ₹50,000\n2. Kishore: Up to ₹5,00,000\n3. Tarun: Up to ₹10,00,000\nApply at any commercial bank or via udyamimitra.in.`;
+    }
+
+    // 8. PM Vishwakarma Scheme
+    if (q.includes('vishwakarma') || q.includes('विश्वकर्मा') || q.includes('விஸ்வகர்மா') || q.includes('విశ్వకర్మ') || q.includes('scheme')) {
+      if (lang === 'hi') return `पीएम विश्वकर्मा योजना के लाभ:\n1. ₹15,000 टूल किट वाउचर।\n2. 5% ब्याज पर ₹3,00,000 तक बिना गारंटी लोन।\n3. ₹500 प्रतिदिन के वजीफे के साथ कौशल प्रशिक्षण।\nनजदीकी CSC सेंटर पर नि:शुल्क पंजीकरण करें।`;
+      if (lang === 'ta') return `பிஎம் விஸ்வகர்மா திட்ட நன்மைகள்:\n1. ₹15,000 கருவி கிட் வவுச்சர்.\n2. 5% வட்டியில் ₹3,00,000 வரை கடன்.\n3. ₹500 தினசரி உதவித்தொகையுடன் பயிற்சி.\nஅருகிலுள்ள CSC மையத்தில் இலவசமாக பதிவு செய்யலாம்.`;
+      if (lang === 'te') return `పిఎం విశ్వకర్మ పథకం ప్రయోజనాలు:\n1. ₹15,000 టూల్ కిట్ వోచర్.\n2. 5% వడ్డీతో ₹3,00,000 వరకు రుణం.\n3. రోజుకు ₹500 స్టైఫండ్‌తో శిక్షణ.\nదగ్గరి CSC కేంద్రంలో ఉచితంగా నమోదు చేసుకోండి.`;
+      if (lang === 'bn') return `পিএম বিশ্বকর্মা যোজনার সুবিধা:\n১. ₹১৫,০০০ টুল কিট ভাউচার।\n২. ৫% সুদে ₹৩,০০,০০০ পর্যন্ত ঋণ।\n৩. দৈনিক ₹৫০০ স্টাইপেন্ডসহ প্রশিক্ষণ।\nনিকটস্থ CSC সেন্টারে বিনামূল্যে নিবন্ধন করুন।`;
+      if (lang === 'mr') return `पीएम विश्वकर्मा योजनेचे फायदे:\n१. ₹१५,००० टूल किट व्हाउचर.\n२. ५% व्याजाने ₹३,००,००० पर्यंत कर्ज.\n३. दररोज ₹५०० विद्यावेतनासह प्रशिक्षण.\nजवळच्या CSC केंद्रावर मोफत नोंदणी करा.`;
+      if (lang === 'kn') return `ಪಿಎಂ ವಿಶ್ವಕರ್ಮ ಯೋಜನೆಯ ಪ್ರಯೋಜನಗಳು:\n1. ₹15,000 ಟೂಲ್ ಕಿಟ್ ವೋಚರ್.\n2. 5% ಬಡ್ಡಿಯೊಂದಿಗೆ ₹3,00,000 ವರೆಗೆ ಸಾಲ.\n3. ದಿನಕ್ಕೆ ₹500 ಸ್ಟೈಫಂಡ್‌ನೊಂದಿಗೆ ತರಬೇತಿ.\nಹತ್ತಿರದ CSC ಕೇಂದ್ರದಲ್ಲಿ ಉಚಿತವಾಗಿ ನೋಂದಾಯಿಸಿ.`;
+      return `PM Vishwakarma Scheme benefits:\n1. ₹15,000 Tool Kit E-Voucher.\n2. 5% Concessional Collateral-free Loan up to ₹3,00,000.\n3. Skill Training with ₹500/day Stipend.\nEnrollment is strictly free at any Common Service Center (CSC).`;
+    }
+
+    // 9. Pehchan Card
+    if (q.includes('pehchan') || q.includes('पहचान') || q.includes('பெஹ்சான்')) {
+      if (lang === 'hi') return `पहचान कारीगर कार्ड (Pehchan Card):\nलाभ: सरकारी स्टॉल, राष्ट्रीय पहचान और योजनाएं।\nजरूरी: आधार, पासबुक, शिल्प बनाते हुए 2 तस्वीरें।\nindianhandicrafts.gov.in पर मुफ्त आवेदन करें।`;
+      if (lang === 'ta') return `பெஹ்சான் காரிகர் அட்டை (Pehchan Card):\nநன்மைகள்: அரசு விற்பனை நிலையங்கள், திட்டங்கள்.\nதேவை: ஆதார், வங்கி புத்தகம், 2 புகைப்படங்கள்.\nindianhandicrafts.gov.in இல் இலவசமாக விண்ணப்பிக்கலாம்.`;
+      if (lang === 'te') return `పెహచాన్ కారిగర్ కార్డ్ (Pehchan Card):\nప్రయోజనాలు: ప్రభుత్వ స్టాల్స్, పథకాలు.\nకావాల్సినవి: ఆధార్, పాస్‌బుక్, 2 ఫోటోలు.\nindianhandicrafts.gov.in లో ఉచితంగా దరఖాస్తు చేసుకోండి.`;
+      if (lang === 'bn') return `পেহচান কারিগর কার্ড (Pehchan Card):\nসুবিধা: সরকারি স্টল, জাতীয় পরিচয় এবং স্কিম।\nপ্রয়োজন: আধার, পাসবুক, ২টি ছবি।\nindianhandicrafts.gov.in এ বিনামূল্যে আবেদন করুন।`;
+      if (lang === 'mr') return `पेहचान कारागीर कार्ड (Pehchan Card):\nफायदे: सरकारी स्टॉल, योजना.\nआवश्यक: आधार, पासबुक, २ फोटो.\nindianhandicrafts.gov.in वर मोफत अर्ज करा.`;
+      if (lang === 'kn') return `ಪೆಹಚಾನ್ ಕಾರಿಗರ್ ಕಾರ್ಡ್ (Pehchan Card):\nಪ್ರಯೋಜನಗಳು: ಸರ್ಕಾರಿ ಮಳಿಗೆಗಳು, ಯೋಜನೆಗಳು.\nಅಗತ್ಯವಿದೆ: ಆಧಾರ್, ಪಾಸ್‌ಬುಕ್, 2 ಫೋಟೋಗಳು.\nindianhandicrafts.gov.in ನಲ್ಲಿ ಉಚಿತವಾಗಿ ಅರ್ಜಿ ಸಲ್ಲಿಸಿ.`;
+      return `Pehchan Artisan ID Card:\nBenefits: Subsidized stalls, national identity, and linkages.\nRequired: Aadhaar, passbook, and 2 working photos.\nFree application via indianhandicrafts.gov.in.`;
+    }
+
+    // 10. Meesho
+    if (q.includes('meesho') || q.includes('मीशो') || q.includes('மீஷो')) {
+      if (lang === 'hi') return `मीशो (Meesho) पर बिक्री:\n1. 0% कमीशन।\n2. supplier.meesho.com पर GSTIN/Enrolment ID से जुड़ें।\n3. 2 या 4 के बंडल में बेचें।\n4. कच्चे माल की कमी पर रद्दीकरण जुर्माना नहीं।`;
+      if (lang === 'ta') return `மீஷோவில் (Meesho) விற்பனை:\n1. 0% கமிஷன்.\n2. supplier.meesho.com இல் GSTIN உடன் இணையவும்.\n3. 2 அல்லது 4 செட்களாக விற்கவும்.\n4. ஆர்டர் ரத்து செய்வதற்கான அபராதம் இல்லை.`;
+      if (lang === 'te') return `మీషో (Meesho) లో అమ్మకం:\n1. 0% కమిషన్.\n2. supplier.meesho.com లో GSTIN తో చేరండి.\n3. 2 లేదా 4 సెట్లుగా అమ్మండి.\n4. ఆర్డర్ రద్దుపై జరిమానా లేదు.`;
+      if (lang === 'bn') return `মিশো (Meesho) তে বিক্রি:\n১. ০% কমিশন।\n২. supplier.meesho.com এ GSTIN দিয়ে যুক্ত হন।\n৩. ২ বা ৪টি সেট করে বিক্রি করুন।\n৪. অর্ডার বাতিলের কোনো জরিমানা নেই।`;
+      if (lang === 'mr') return `मीशो (Meesho) वर विक्री:\n१. ०% कमिशन.\n२. supplier.meesho.com वर GSTIN ने नोंदणी करा.\n३. २ किंवा ४ चा सेट करून विका.\n४. ऑर्डर रद्द केल्यास कोणताही दंड नाही.`;
+      if (lang === 'kn') return `ಮೀಶೋ (Meesho) ದಲ್ಲಿ ಮಾರಾಟ:\n1. 0% ಕಮಿಷನ್.\n2. supplier.meesho.com ನಲ್ಲಿ GSTIN ಮೂಲಕ ಸೇರಿ.\n3. 2 ಅಥವಾ 4 ರ ಸೆಟ್ ಮಾಡಿ ಮಾರಿ.\n4. ಆರ್ಡರ್ ರದ್ದತಿ ದಂಡವಿಲ್ಲ.`;
+      return `Selling on Meesho:\n1. Key advantage: 0% Commission.\n2. Registration: supplier.meesho.com with GSTIN/Enrolment ID.\n3. Bundling: Sell in sets of 2 or 4 to absorb courier costs.\n4. Zero penalties for cancellations due to material shortages.`;
+    }
+
+    // 11. Flipkart Samarth
+    if (q.includes('flipkart') || q.includes('फ्लिपकार्ट')) {
+      if (lang === 'hi') return `फ्लिपकार्ट समर्थ (Flipkart Samarth):\n1. पहले 6 महीने 0% कमीशन।\n2. seller.flipkart.com/sell-online/samarth पर पंजीकरण करें।\n3. आपको एक समर्पित खाता प्रबंधक (Account Manager) मिलता है।`;
+      if (lang === 'ta') return `பிளிப்கார்ட் சமர்த் (Flipkart Samarth):\n1. முதல் 6 மாதங்களுக்கு 0% கமிஷன்.\n2. seller.flipkart.com/sell-online/samarth இல் பதிவு செய்யவும்.\n3. உதவிக்கு ஒரு பிரத்யேக மேலாளர் ஒதுக்கப்படுவார்.`;
+      if (lang === 'te') return `ఫ్లిప్‌కార్ట్ సమర్థ్ (Flipkart Samarth):\n1. మొదటి 6 నెలలకు 0% కమిషన్.\n2. seller.flipkart.com/sell-online/samarth లో నమోదు చేసుకోండి.\n3. మీకు సహాయం చేయడానికి ప్రత్యేక మేనేజర్ ఉంటారు.`;
+      if (lang === 'bn') return `ফ্লিপকার্ট সমর্থ (Flipkart Samarth):\n১. প্রথম ৬ মাস ০% কমিশন।\n২. seller.flipkart.com/sell-online/samarth এ নিবন্ধন করুন।\n৩. আপনাকে একজন ডেডিকেটেড অ্যাকাউন্ট ম্যানেজার দেওয়া হবে।`;
+      if (lang === 'mr') return `फ्लिपकार्ट समर्थ (Flipkart Samarth):\n१. पहिले ६ महिने ०% कमिशन.\n२. seller.flipkart.com/sell-online/samarth वर नोंदणी करा.\n३. तुम्हाला मदत करण्यासाठी एक खास मॅनेजर दिला जातो.`;
+      if (lang === 'kn') return `ಫ್ಲಿಪ್‌ಕಾರ್ಟ್ ಸಮರ್ಥ್ (Flipkart Samarth):\n1. ಮೊದಲ 6 ತಿಂಗಳು 0% ಕಮಿಷನ್.\n2. seller.flipkart.com/sell-online/samarth ನಲ್ಲಿ ನೋಂದಾಯಿಸಿ.\n3. ನಿಮಗೆ ಸಹಾಯ ಮಾಡಲು ಮೀಸಲಾದ ಮ್ಯಾನೇಜರ್ ಇರುತ್ತಾರೆ.`;
+      return `Flipkart Samarth:\n1. Eligibility: Dedicated program offering 0% commission for the first 6 months.\n2. Registration: Visit seller.flipkart.com/sell-online/samarth with Pehchan card.\n3. Support: Flipkart assigns a dedicated onboarding manager.`;
+    }
+
+    // 12. GeM
+    if (q.includes('gem') || q.includes('जेम')) {
+      if (lang === 'hi') return `गवर्नमेंट ई-मार्केटप्लेस (GeM):\n1. पहचान कार्ड धारकों को EMD और टर्नओवर नियमों से छूट मिलती है।\n2. 100% 'मेक input इन इंडिया' घोषित करें।\n3. आर्टिसेरा तकनीकी विवरण पैकेज तैयार करता है।`;
+      if (lang === 'ta') return `GeM (அரசு மின் சந்தை):\n1. பெஹ்சான் அட்டை உள்ளவர்களுக்கு EMD இலிருந்து விலக்கு உண்டு.\n2. 100% 'இந்தியாவில் தயாரிக்கப்பட்டது' என அறிவிக்க வேண்டும்.\n3. ஆர்ட்டிசெரா தொழில்நுட்ப விவரங்களை உருவாக்கும்.`;
+      if (lang === 'te') return `GeM (ప్రభుత్వ ఈ-మార్కెట్‌ప్లేస్):\n1. పెహచాన్ కార్డు ఉన్నవారికి EMD నుండి మినహాయింపు ఉంటుంది.\n2. 100% 'మేక్ ఇన్ ఇండియా' అని ప్రకటించాలి.\n3. ఆర్టిసెరా సాంకేతిక వివరాలను సిద్ధం చేస్తుంది.`;
+      if (lang === 'bn') return `GeM (সরকারি ই-মার্কেটপ্লেস):\n১. পেহচান কার্ডধারীদের EMD থেকে ছাড় দেওয়া হয়।\n২. ১০০% 'মেক ইন ইন্ডিয়া' ঘোষণা করতে হবে।\n৩. আর্টিসেরা প্রযুক্তিগত স্পেসিফিকেশন প্যাকেজ তৈরি করে।`;
+      if (lang === 'mr') return `GeM (सरकारी ई-मार्केटप्लेस):\n१. पेहचान कार्डधारकांना EMD मधून सूट मिळते.\n२. १००% 'मेक इन इंडिया' घोषित करा.\n३. आर्टिसेरा तांत्रिक तपशील पॅकेज तयार करते.`;
+      if (lang === 'kn') return `GeM (ಸರ್ಕಾರಿ ಇ-ಮಾರುಕಟ್ಟೆ):\n1. ಪೆಹಚಾನ್ ಕಾರ್ಡ್ ಹೊಂದಿರುವವರಿಗೆ EMD ನಿಂದ ವಿನಾಯಿತಿ ಇದೆ.\n2. 100% 'ಮೇಕ್ ಇನ್ ಇಂಡಿಯಾ' ಎಂದು ಘೋಷಿಸಿ.\n3. ಆರ್ಟಿಸೆರಾ ತಾಂತ್ರಿಕ ವಿವರಗಳನ್ನು ಸಿದ್ಧಪಡಿಸುತ್ತದೆ.`;
+      return `GeM (Government e-Marketplace):\n1. Artisans with Pehchan cards are exempt from Earnest Money Deposit (EMD) and prior turnover rules.\n2. Declare 100% Make in India local content.\n3. Artisera provides the compliant technical specification package.`;
+    }
+
+    // 13. ONDC
+    if (q.includes('ondc') || q.includes('ओएनडीसी')) {
+      if (lang === 'hi') return `ओएनडीसी (ONDC):\n1. यह कोई एकल ऐप नहीं, एक नेटवर्क है। Mystore आदि से जुड़ें।\n2. आपका उत्पाद सभी खरीदार ऐप्स पर दिखाई देता है।\n3. नेटवर्क कमीशन केवल 3% से 8% है।`;
+      if (lang === 'ta') return `ONDC (திறந்த நெட்வொர்க்):\n1. Mystore போன்ற செயலி மூலம் இணையலாம்.\n2. உங்கள் தயாரிப்பு அனைத்து வாங்கும் செயலிகளிலும் தோன்றும்.\n3. கமிஷன் 3% முதல் 8% வரை மட்டுமே.`;
+      if (lang === 'te') return `ONDC (ఓపెన్ నెట్‌వర్క్):\n1. ఇది ఒక నెట్‌వర్క్. Mystore ద్వారా చేరండి.\n2. మీ ఉత్పత్తి అన్ని కొనుగోలు యాప్‌లలో కనిపిస్తుంది.\n3. కమిషన్ కేవలం 3% నుండి 8% వరకు మాత్రమే.`;
+      if (lang === 'bn') return `ONDC (ওপেন নেটওয়ার্ক):\n১. এটি একটি নেটওয়ার্ক। Mystore এর মাধ্যমে যুক্ত হন।\n২. আপনার পণ্য সমস্ত ক্রেতা অ্যাপে দেখা যাবে।\n৩. কমিশন মাত্র ৩% থেকে ৮%।`;
+      if (lang === 'mr') return `ONDC (ओपन नेटवर्क):\n१. हे एक नेटवर्क आहे. Mystore द्वारे कनेक्ट व्हा.\n२. तुमचे उत्पादन सर्व खरेदीदार अॅप्सवर दिसेल.\n३. कमिशन फक्त ३% ते ८% आहे.`;
+      if (lang === 'kn') return `ONDC (ಓಪನ್ ನೆಟ್‌ವರ್ಕ್):\n1. Mystore ನಂತಹ ಅಪ್ಲಿಕೇಶನ್ ಮೂಲಕ ಸೇರಿ.\n2. ನಿಮ್ಮ ಉತ್ಪನ್ನವು ಎಲ್ಲಾ ಖರೀದಿದಾರ ಅಪ್ಲಿಕೇಶನ್‌ಗಳಲ್ಲಿ ಕಾಣಿಸಿಕೊಳ್ಳುತ್ತದೆ.\n3. ಕಮಿಷನ್ ಕೇವಲ 3% ರಿಂದ 8% ರಷ್ಟಿದೆ.`;
+      return `ONDC (Open Network for Digital Commerce):\n1. Not a single website: Register through an authorized Seller App like Mystore.\n2. Your craft appears across Paytm, Pincode, etc.\n3. Network commission is only 3% to 8%.`;
+    }
+
+    // 14. Catalogue or Stats Navigation
+    if (q.includes('catalogue') || q.includes('catalog') || q.includes('stats') || q.includes('stat') || q.includes('कैटलॉग') || q.includes('आंकड़े')) {
+      if (lang === 'hi') return `आप आर्टिसेरा ऐप में 'कैटलॉग' टैब पर जाकर अपने उत्पाद देख और संपादित कर सकते हैं, या 'आंकड़े' में जाकर अपने उत्पादों के व्यूज और ऑर्डर देख सकते हैं।`;
+      if (lang === 'ta') return `ஆர்ட்டிசெரா செயலியில் 'கேட்லாக்' (Catalogue) மூலம் உங்கள் தயாரிப்புகளை நிர்வகிக்கலாம், அல்லது 'புள்ளிவிவரங்கள்' (Stats) மூலம் பார்வைகளை அறியலாம்.`;
+      if (lang === 'te') return `ఆర్టిసెరా యాప్‌లో 'కేటలాగ్' ద్వారా మీ ఉత్పత్తులను నిర్వహించవచ్చు లేదా 'గణాంకాలు' (Stats) ద్వారా వీక్షణలను తెలుసుకోవచ్చు.`;
+      if (lang === 'bn') return `আর্টিসেরা অ্যাপে 'ক্যাটালগ' এর মাধ্যমে আপনার পণ্য পরিচালনা করতে পারেন, অথবা 'পরিসংখ্যান' (Stats) থেকে ভিউজ দেখতে পারেন।`;
+      if (lang === 'mr') return `आर्टिसेरा अॅपमध्ये 'कॅटलॉग' द्वारे तुम्ही तुमची उत्पादने व्यवस्थापित करू शकता, किंवा 'आकडेवारी' (Stats) मधून व्ह्यूज पाहू शकता.`;
+      if (lang === 'kn') return `ಆರ್ಟಿಸೆರಾ ಅಪ್ಲಿಕೇಶನ್‌ನಲ್ಲಿ 'ಕ್ಯಾಟಲಾಗ್' ಮೂಲಕ ನಿಮ್ಮ ಉತ್ಪನ್ನಗಳನ್ನು ನಿರ್ವಹಿಸಬಹುದು, ಅಥವಾ 'ಅಂಕಿಅಂಶಗಳು' (Stats) ಮೂಲಕ ವೀಕ್ಷಣೆಗಳನ್ನು ತಿಳಿಯಬಹುದು.`;
+      return `You can view and manage all your artisan craft listings by visiting your Catalogue screen in Artisera, or check customer views and orders in your Stats dashboard.`;
+    }
+
+    // 15. If RAG context has useful text
+    if (contextString && contextString.length > 30) {
+      const firstChunk = contextString.split('---')[1] || contextString;
+      const cleanSnippet = firstChunk.replace(/DOCUMENT:.*?\n/g, '').replace(/OFFICIAL SOURCE:.*?\n/g, '').trim();
+      if (cleanSnippet.length > 40) return cleanSnippet.substring(0, 300) + '...';
+    }
+
+    // 16. Default Friendly Greeting
+    if (lang === 'hi') return `नमस्ते! मैं आपका आर्टिसेरा कारीगर मार्गदर्शक हूँ।\n\nमैं आपकी सहायता कर सकता हूँ:\n1. पीएम विश्वकर्मा और मुद्रा योजना में पंजीकरण।\n2. नया उत्पाद जोड़ने के 6 सरल चरण।\n3. अमेज़न, फ्लिपकार्ट, जेम और ओएनडीसी के लिए तैयारी।\n4. कारीगरों के लिए उचित मूल्य और लाभ गणना।\n\nआप आज क्या शुरू करना चाहते हैं?`;
+    if (lang === 'ta') return `வணக்கம்! நான் உங்கள் ஆர்ட்டிசெரா கைவினை வழிகாட்டி.\n\nநான் உங்களுக்கு உதவ முடியும்:\n1. பிஎம் விஸ்வகர்மா மற்றும் முத்ரா திட்டங்கள்.\n2. புதிய பொருளைச் சேர்க்க 6 எளிய படிகள்.\n3. அமேசான், பிளிப்கார்ட், GeM, ONDC விற்பனை தயாரிப்பு.\n4. நியாயமான விலை மற்றும் லாப கணக்கீடு.\n\nஇன்று நாம் எதிலிருந்து தொடங்கலாம்?`;
+    if (lang === 'te') return `నమస్కారం! నేను మీ ఆర్టిసెరా కళాకారుల మార్గదర్శిని.\n\nనేను మీకు సహాయం చేయగలను:\n1. పిఎం విశ్వకర్మ మరియు ముద్రా పథకాలు.\n2. కొత్త వస్తువును రూపొందించడానికి 6 సులభ దశలు.\n3. అమెజాన్, ఫ్లిప్‌కార్ట్, GeM, ONDC విక్రయ సంసిద్ధత.\n4. సరసమైన ధర మరియు లాభం లెక్కింపు.\n\nఈరోజు మీరు దేనితో ప్రారంభించాలనుకుంటున్నారు?`;
+    if (lang === 'bn') return `নমস্কার! আমি আপনার আর্টিসেরা কারিগর গাইড।\n\nআমি আপনাকে সাহায্য করতে পারি:\n১. পিএম বিশ্বকর্মা এবং মুদ্রা ঋণ স্কিম।\n২. নতুন পণ্য যোগ করার ৬টি সহজ ধাপ।\n৩. অ্যামাজন, ফ্লিপকার্ট, GeM, ONDC বিক্রির প্রস্তুতি।\n৪. ন্যায্য মূল্য এবং মুনাফা গণনা।\n\nআজ আপনি কী দিয়ে শুরু করতে চান?`;
+    if (lang === 'mr') return `नमस्ते! मी तुमचा आर्टिसेरा कारागीर मार्गदर्शक आहे.\n\nमी तुम्हाला मदत करू शकतो:\n१. पीएम विश्वकर्मा आणि मुद्रा योजना नोंदणी.\n२. नवीन उत्पादन तयार करण्याचे ६ सोपे टप्पे.\n३. अॅमेझॉन, फ्लिपकार्ट, GeM, ONDC विक्री तयारी.\n४. योग्य किंमत आणि नफा गणित.\n\nआज आपण कशाने सुरुवात करूया?`;
+    if (lang === 'kn') return `ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಆರ್ಟಿಸೆರಾ ಕುಶಲಕರ್ಮಿ ಮಾರ್ಗದರ್ಶಿ.\n\nನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ:\n1. ಪಿಎಂ ವಿಶ್ವಕರ್ಮ ಮತ್ತು ಮುದ್ರಾ ಯೋಜನೆಗಳು.\n2. ಹೊಸ ಉತ್ಪನ್ನ ರಚಿಸಲು 6 ಸರಳ ಹಂತಗಳು.\n3. ಅಮೆಜಾನ್, ಫ್ಲಿಪ್‌ಕಾರ್ಟ್, GeM, ONDC ಮಾರಾಟ ಸಿದ್ಧತೆ.\n4. ನ್ಯಾಯಯುತ ಬೆಲೆ ಮತ್ತು ಲಾಭದ ಲೆಕ್ಕಾಚಾರ.\n\nಇಂದು ನೀವು ಏನನ್ನು ಪ್ರಾರಂಭಿಸಲು ಬಯಸುತ್ತೀರಿ?`;
+    
     return `Namaste! I am your Artisera Artisan Guide.\n\nI can help you step-by-step with:\n1. Registering for PM Vishwakarma and Mudra loans.\n2. Creating a new Artisera craft listing in 6 easy steps.\n3. Evaluating marketplace readiness for Amazon, Flipkart, GeM, ONDC, and Meesho.\n4. Calculating fair living wages and healthy profit margins.\n\nWhat would you like to explore today?`;
   }
+
 }
