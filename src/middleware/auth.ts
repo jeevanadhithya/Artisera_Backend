@@ -97,10 +97,12 @@ export const requireAuth = async (
 
   try {
     if (token === 'test-token') {
+      const testUserId = (req.headers['x-test-user-id'] as string) || '11111111-1111-1111-1111-111111111111';
+      const testRole = ((req.headers['x-test-role'] as string) || 'artisan') as 'artisan' | 'buyer' | 'admin';
       req.user = {
-        user_id: '11111111-1111-1111-1111-111111111111',
+        user_id: testUserId,
         email: 'test@artisera.com',
-        role: 'artisan',
+        role: testRole,
         raw: {}
       };
       return next();

@@ -12,6 +12,7 @@ import { BadRequestError, ForbiddenError, NotFoundError, OwnershipError } from '
 
 import { getSupabase } from '../services/supabase';
 import { config } from '../config';
+import { evaluate, generate, marketplaceMetadata, Marketplace } from '../services/marketplaceExport';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -56,6 +57,43 @@ router.post('/', getOptionalUser, async (req: AuthenticatedRequest, res: Respons
   } catch (error) {
     next(error);
   }
+});
+
+// ─── Marketplace Export Suite ────────────────────────────────────────────────
+// Export-only: adapters prepare files and previews; they never publish externally.
+const marketplaces: Marketplace[] = ['amazon', 'flipkart', 'gem', 'ondc', 'meesho', 'generic'];
+const exportContext = async (req: AuthenticatedRequest) => {
+  const user = req.user!;
+  const product = await verifyOwnership(req.params.product_id, user.user_id, user.role);
+  return { product, artisan: await db.getArtisanById(product.artisan_id) };
+};
+const requestedMarketplace = (raw: string): Marketplace => {
+  if (!marketplaces.includes(raw as Marketplace)) throw new BadRequestError('Unsupported marketplace.', 'INVALID_MARKETPLACE');
+  return raw as Marketplace;
+};
+
+router.get('/marketplaces', requireAuth, (_req, res) => res.json(success(marketplaceMetadata())));
+router.get('/:product_id/export-options', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try { const { product, artisan } = await exportContext(req); res.json(success(marketplaces.map(marketplace => evaluate(product, artisan, marketplace)))); } catch (error) { next(error); }
+});
+router.get('/:product_id/export/:marketplace/readiness', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try { const { product, artisan } = await exportContext(req); res.json(success(evaluate(product, artisan, requestedMarketplace(req.params.marketplace)))); } catch (error) { next(error); }
+});
+router.post('/:product_id/export/:marketplace/validate', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try { const { product, artisan } = await exportContext(req); res.json(success(evaluate(product, artisan, requestedMarketplace(req.params.marketplace)))); } catch (error) { next(error); }
+});
+router.get('/:product_id/export/:marketplace/preview', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try { const { product, artisan } = await exportContext(req); res.json(success(evaluate(product, artisan, requestedMarketplace(req.params.marketplace)))); } catch (error) { next(error); }
+});
+router.post('/:product_id/export/:marketplace/generate', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { product, artisan } = await exportContext(req); const marketplace = requestedMarketplace(req.params.marketplace);
+    const format = String(req.body?.format || (marketplace === 'amazon' ? 'xlsx' : marketplace === 'flipkart' ? 'csv' : 'json')).toLowerCase();
+    const output = await generate(product, artisan, marketplace, format);
+    // Records the audit trail; file bytes are streamed to the artisan and are not stored as public data.
+    try { await db.query('INSERT INTO public.marketplace_exports (product_id, seller_id, marketplace, template_version, format, status, validation_result) VALUES ($1,$2,$3,$4,$5,$6,$7)', [product.id, artisan.user_id, marketplace, output.assessed.template_version, format, 'generated', JSON.stringify(output.assessed)]); } catch (recordError) { console.warn('Marketplace export history was not recorded. Apply migration 003.', recordError); }
+    res.setHeader('Content-Type', output.contentType); res.setHeader('Content-Disposition', `attachment; filename="${output.filename}"`); res.setHeader('X-Artisera-Readiness', String(output.assessed.readiness)); res.send(output.buffer);
+  } catch (error) { next(error); }
 });
 
 // ─── List Products (GET /products) ────────────────────────────────────────────
@@ -719,21 +757,10 @@ router.get('/:product_id/translations', async (req: AuthenticatedRequest, res: R
 // ─── Marketplace Export (GET /products/:id/export/:marketplace) ─────────────
 router.get('/:product_id/export/:marketplace', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const user = req.user!;
-    const product = await db.getProductById(req.params.product_id);
-
-    if (user.role === 'artisan') {
-      const artisan = await db.getArtisanByUserId(user.user_id);
-      if (!artisan || artisan.id !== product.artisan_id) {
-        throw new ForbiddenError('You can only export your own products');
-      }
-    }
-
-    const marketplace = req.params.marketplace.toLowerCase() as 'amazon' | 'flipkart' | 'gem';
-    const { MarketplaceExportService } = await import('../services/marketplace');
-    const exportPayload = MarketplaceExportService.exportProduct(product, marketplace);
-
-    res.status(200).json(success(exportPayload));
+    const { product, artisan } = await exportContext(req);
+    // Backwards-compatible preview endpoint. It intentionally does not create a
+    // marketplace upload payload or claim an external listing was published.
+    res.status(200).json(success(evaluate(product, artisan, requestedMarketplace(req.params.marketplace))));
   } catch (error) {
     next(error);
   }

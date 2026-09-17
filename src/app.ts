@@ -22,6 +22,7 @@ import pricingRouter from './routes/pricing';
 import mlRouter from './routes/ml';
 import { aiRouter } from './routes/ai';
 import copilotRouter from './routes/copilot';
+import marketplacesRouter from './routes/marketplaces';
 
 const app = express();
 
@@ -540,6 +541,7 @@ app.use(`${API_PREFIX}/pricing`, pricingRouter);
 app.use(`${API_PREFIX}/ml`, mlRouter);
 app.use(`${API_PREFIX}/copilot`, copilotRouter);
 app.use(`${API_PREFIX}/chatbot`, copilotRouter);
+app.use(`${API_PREFIX}/marketplaces`, marketplacesRouter);
 
 // Fallbacks for direct route matching
 app.use('/health', healthRouter);
@@ -560,6 +562,7 @@ app.use('/pricing', pricingRouter);
 app.use('/ml', mlRouter);
 app.use('/copilot', copilotRouter);
 app.use('/chatbot', copilotRouter);
+app.use('/marketplaces', marketplacesRouter);
 
 // ─── Global Error Handler ────────────────────────────────────────────────────
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
