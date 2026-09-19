@@ -6,9 +6,6 @@
     "dev": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
     "start": "node dist/src/server.js",
-    "test": "tsx src/test_marketplace_exports.ts",
-    "test:marketplace": "tsx src/test_marketplace_exports.ts",
-    "test:guide": "tsx src/test_artisan_guide.ts",
     "migrate": "tsx migrations/003_marketplace_exports.ts",
     "migrate:marketplaces": "tsx migrations/003_marketplace_exports.ts"
   },

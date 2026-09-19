@@ -1,13 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { FreeImageProcessingProvider } from '../services/image/freeImageProcessingProvider';
 import { detectImageExtension } from '../services/image';
+import { config } from '../config';
 
 const router = Router();
 const success = (data: any) => ({ success: true, data });
 const processor = new FreeImageProcessingProvider();
 
 // Dynamic AWS URL configuration (can be updated at runtime without restart)
-let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://13.63.125.7:8000';
+let dynamicAwsUrl = config.IMAGE_AI_URL;
 
 /**
  * GET /api/ml/config
@@ -16,8 +17,8 @@ let dynamicAwsUrl = process.env.IMAGE_AI_URL || 'http://13.63.125.7:8000';
 router.get('/config', (req: Request, res: Response) => {
   res.status(200).json(success({
     active_aws_url: dynamicAwsUrl,
-    env_aws_url: process.env.IMAGE_AI_URL || null,
-    timeout_ms: parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '2500', 10),
+    env_aws_url: config.IMAGE_AI_URL || null,
+    timeout_ms: config.IMAGE_AI_TIMEOUT_MS || 2500,
     backup_engine: 'Artisera-ML-CV-Studio-v2.0 (Local Sharp + CLAHE + Studio Compositor)',
     tip: 'To prevent AWS IP changing on restart, associate an Elastic IP (EIP) in AWS EC2 Console, or POST new IP to this endpoint.'
   }));
@@ -66,7 +67,7 @@ router.get('/health', (req: Request, res: Response) => {
         engine: 'AWS Neural Enhancement + U²-Net Segmentation + CLAHE LAB Contrast + Studio Shadow',
         status: 'online',
         primary: dynamicAwsUrl,
-        fallback: process.env.IMAGE_AI_BACKUP || 'gemini',
+        fallback: 'RemoveBG API',
         supported_styles: ['warm_ivory', 'pure_white', 'earth_neutral', 'transparent'],
         aspect_ratios: ['1:1', '4:5', '16:9', 'original'],
       },
@@ -131,7 +132,7 @@ router.post('/enhance', async (req: Request, res: Response, next: NextFunction) 
     // ── PRIMARY: AWS EC2 Neural Image Enhancement Server ─────────────────────
     const preferEngine = req.body?.prefer_engine; // 'local' | 'aws'
     const awsUrl = req.body?.aws_url || dynamicAwsUrl;
-    const awsTimeoutMs = parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '45000', 10);
+    const awsTimeoutMs = config.IMAGE_AI_TIMEOUT_MS || 45000;
     let awsSuccess = false;
 
     const detected = detectImageExtension(inputBytes, contentType);
@@ -222,41 +223,58 @@ router.post('/enhance', async (req: Request, res: Response, next: NextFunction) 
     }
   }
 
-    // ── FALLBACK: Built-in Sharp + U²-Net + CLAHE pipeline ───────────────────
+    // ── FALLBACK: Remove BG API ───────────────────
     if (!awsSuccess) {
       try {
-        const processed = await processor.processImage({
-          imageBytes: inputBytes,
-          contentType,
-          backgroundStyle: background_style,
-          addShadow: add_shadow,
-          aspectRatio: aspect_ratio,
-          maxDimension: max_dimension,
-          quality: quality,
-          operations: {
-            backgroundCleanup: true,
-            backgroundRemoval: background_style === 'transparent',
-            brightnessCorrection: true,
-            contrastAdjustment: true,
-            whiteBalance: true,
-            sharpening: true,
-            noiseReduction: false,
-            crop: true,
-            centerProduct: true,
-            resize: true,
-            compression: true,
-          }
+        console.log('Falling back to Remove BG API...');
+        const FormData = (await import('form-data')).default;
+        const axios = (await import('axios')).default;
+        const form = new FormData();
+        
+        form.append('image_file', inputBytes, { filename: 'image.jpg', contentType });
+        form.append('size', 'auto');
+        
+        if (background_style !== 'transparent') {
+          const bgColors: Record<string, string> = {
+            warm_ivory: '#F7F3EA',
+            pure_white: 'white',
+            earth_neutral: '#EAE6DF',
+          };
+          form.append('bg_color', bgColors[background_style] || '#F7F3EA');
+        }
+
+        const removeBgApiKey = config.REMOVE_BG_API_KEY;
+        if (!removeBgApiKey) {
+          throw new Error('REMOVE_BG_API_KEY is not configured in environment variables');
+        }
+
+        const removeBgResp = await axios.post('https://api.remove.bg/v1.0/removebg', form, {
+          headers: {
+            ...form.getHeaders(),
+            'X-Api-Key': removeBgApiKey
+          },
+          responseType: 'arraybuffer'
         });
 
-        outputB64 = `data:${processed.contentType};base64,${processed.content.toString('base64')}`;
-        width = processed.width;
-        height = processed.height;
-        fileSize = processed.fileSize;
-        outContentType = processed.contentType;
-        engine = 'Artisera-ML-CV-Studio-v2.0';
-        console.log('✅ Built-in Sharp ML pipeline succeeded as fallback.');
-      } catch (sharpErr: any) {
-        console.error('Built-in Sharp pipeline also failed:', sharpErr?.message);
+        const enhancedBuffer = Buffer.from(removeBgResp.data, 'binary');
+        outContentType = 'image/png';
+        outputB64 = `data:image/png;base64,${enhancedBuffer.toString('base64')}`;
+        
+        try {
+            const sharp = (await import('sharp')).default;
+            const meta = await sharp(enhancedBuffer).metadata();
+            width = meta.width || 1000;
+            height = meta.height || 1000;
+        } catch(e) {
+            width = 1000;
+            height = 1000;
+        }
+        
+        fileSize = enhancedBuffer.length;
+        engine = 'RemoveBG-API';
+        console.log('✅ Remove BG API succeeded as fallback.');
+      } catch (apiErr: any) {
+        console.error('Remove BG API pipeline also failed:', apiErr?.message);
         // Last resort: return original image unchanged so UI still works
         outputB64 = `data:${contentType};base64,${inputBytes.toString('base64')}`;
         outContentType = contentType;

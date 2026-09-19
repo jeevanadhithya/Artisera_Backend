@@ -57,6 +57,10 @@ export interface Config {
   STORAGE_BUCKET_VOICES: string;
   
   // Image Enhancement
+  IMAGE_AI_URL: string;
+  IMAGE_AI_BACKUP: string;
+  IMAGE_AI_TIMEOUT_MS: number;
+  REMOVE_BG_API_KEY?: string;
   ENHANCE_MAX_DIMENSION: number;
   ENHANCE_JPEG_QUALITY: number;
   ENHANCE_SHARPEN_AMOUNT: number;
@@ -98,6 +102,11 @@ export const config: Config = {
   
   STORAGE_BUCKET_PRODUCTS: process.env.STORAGE_BUCKET_PRODUCTS || 'product-images',
   STORAGE_BUCKET_VOICES: process.env.STORAGE_BUCKET_VOICES || 'voice-recordings',
+  
+  IMAGE_AI_URL: process.env.IMAGE_AI_URL || 'http://13.63.125.7:8000',
+  IMAGE_AI_BACKUP: process.env.IMAGE_AI_BACKUP || 'remove_bg',
+  IMAGE_AI_TIMEOUT_MS: parseInt(process.env.IMAGE_AI_TIMEOUT_MS || '30000', 10),
+  REMOVE_BG_API_KEY: process.env.REMOVE_BG_API_KEY,
   
   ENHANCE_MAX_DIMENSION: parseInt(process.env.ENHANCE_MAX_DIMENSION || '1200', 10),
   ENHANCE_JPEG_QUALITY: parseInt(process.env.ENHANCE_JPEG_QUALITY || '92', 10),
